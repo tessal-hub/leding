@@ -12,29 +12,41 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.lifecycleScope
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import com.esp32.ledmatrix360.ble.BleManager
 import com.esp32.ledmatrix360.data.PreferencesRepository
 import com.esp32.ledmatrix360.data.WeatherRepository
+import com.esp32.ledmatrix360.model.LampConstants
+import com.esp32.ledmatrix360.model.SmartRoutineConfig
 import com.esp32.ledmatrix360.model.WeatherData
 import com.esp32.ledmatrix360.service.BleForegroundService
 import com.esp32.ledmatrix360.ui.*
 import com.esp32.ledmatrix360.worker.WeatherTimeWorker
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import java.util.Calendar
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
 
@@ -107,13 +119,40 @@ class MainActivity : ComponentActivity() {
                     bleManager = bleManager,
                     prefsRepository = prefsRepository,
                     weatherRepository = weatherRepository,
-                    onRequestPermissions = { checkAndRequestPermissions() },
+                    onRequestPermissions = {
+                        if (!hasRequiredPermissions()) {
+                            checkAndRequestPermissions()
+                        } else {
+                            if (bleManager.isConnected.value) {
+                                Toast.makeText(this@MainActivity, "Đã kết nối với đèn LED Matrix 360", Toast.LENGTH_SHORT).show()
+                            } else if (bleManager.isScanning.value) {
+                                bleManager.stopScan()
+                                Toast.makeText(this@MainActivity, "Đã dừng quét Bluetooth", Toast.LENGTH_SHORT).show()
+                            } else {
+                                bleManager.startScan()
+                                Toast.makeText(this@MainActivity, "Đang quét tìm đèn LED Matrix 360...", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
                     onOpenNotificationSettings = { openNotificationListenerSettings() },
                     onRequestBatteryOptimization = { requestIgnoreBatteryOptimizations() },
                     onSyncNow = { triggerManualSync() },
                     onPickFirmwareFile = { firmwarePickerLauncher.launch("*/*") }
                 )
             }
+        }
+    }
+
+    private fun hasRequiredPermissions(): Boolean {
+        val permissions = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            permissions.add(Manifest.permission.BLUETOOTH_SCAN)
+            permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+        } else {
+            permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+        return permissions.all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
         }
     }
 
@@ -165,17 +204,21 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class ScreenTab(val title: String, val icon: ImageVector) {
-    MODES("Hiệu ứng", Icons.Default.GridView),
-    COLOR("Màu sắc", Icons.Default.Palette),
-    MARQUEE("Chạy chữ", Icons.Default.Subtitles),
-    PIXEL("Pixel", Icons.Default.GridOn),
-    WEATHER("Thời tiết", Icons.Default.WbSunny),
-    NOTIF("Thông báo", Icons.Default.Notifications),
-    SENSORS("Cảm biến", Icons.Default.Explore),
-    OTA("OTA", Icons.Default.SystemUpdate)
+/**
+ * 4 Canonical Material Design 3 Destinations
+ */
+enum class MainDestination(
+    val title: String,
+    val selectedIcon: ImageVector,
+    val unselectedIcon: ImageVector
+) {
+    STUDIO("Hiệu ứng", Icons.Filled.Lightbulb, Icons.Outlined.Lightbulb),
+    CREATIVE("Sáng tạo", Icons.Filled.Palette, Icons.Outlined.Palette),
+    ROUTINES("Kịch bản", Icons.Filled.Alarm, Icons.Outlined.Alarm),
+    DEVICE("Thiết bị", Icons.Filled.Tune, Icons.Outlined.Tune)
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainAppScreen(
     bleManager: BleManager,
@@ -187,6 +230,7 @@ fun MainAppScreen(
     onSyncNow: () -> Unit,
     onPickFirmwareFile: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val isConnected by bleManager.isConnected.collectAsState()
     val isScanning by bleManager.isScanning.collectAsState()
     val telemetry by bleManager.telemetryState.collectAsState()
@@ -194,160 +238,305 @@ fun MainAppScreen(
 
     val notifConfigs by prefsRepository.notificationConfigsFlow.collectAsState(initial = emptyList())
     val selectedCity by prefsRepository.selectedCityFlow.collectAsState(initial = "Hà Nội")
+    val smartRoutineConfig by prefsRepository.smartRoutinesFlow.collectAsState(initial = SmartRoutineConfig())
+    val lastMarquee by prefsRepository.lastMarqueeFlow.collectAsState(initial = "LED MATRIX 360")
+    val effectSpeed by prefsRepository.effectSpeedFlow.collectAsState(initial = 50)
 
     var weatherData by remember { mutableStateOf(WeatherData(cityName = selectedCity)) }
-    var selectedTab by remember { mutableStateOf(ScreenTab.MODES) }
+    var currentDestination by remember { mutableStateOf(MainDestination.STUDIO) }
     val scope = rememberCoroutineScope()
 
-    // Tự động kéo thời tiết khi đổi thành phố
-    LaunchedEffect(selectedCity) {
-        scope.launch(Dispatchers.IO) {
-            val data = weatherRepository.fetchWeather(selectedCity)
-            withContext(Dispatchers.Main) {
+    // Tự động kéo dữ liệu thời tiết định kỳ (15 phút) và đồng bộ xuống đèn ngay khi kết nối
+    LaunchedEffect(selectedCity, isConnected) {
+        while (isActive) {
+            try {
+                val data = withContext(Dispatchers.IO) {
+                    weatherRepository.fetchWeather(selectedCity)
+                }
                 weatherData = data
+                if (bleManager.isConnected.value) {
+                    bleManager.sendWeather(data.temp, data.weatherId)
+                    val cal = Calendar.getInstance()
+                    bleManager.sendTimeSync(
+                        cal.get(Calendar.HOUR_OF_DAY),
+                        cal.get(Calendar.MINUTE),
+                        cal.get(Calendar.SECOND)
+                    )
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
+            delay(15 * 60 * 1000L) // Tự động cập nhật mỗi 15 phút
         }
     }
 
     Scaffold(
-        containerColor = BgDark,
-        bottomBar = {
-            ScrollableTabRow(
-                selectedTabIndex = selectedTab.ordinal,
-                containerColor = CardBg,
-                edgePadding = 8.dp
-            ) {
-                ScreenTab.entries.forEach { tab ->
-                    Tab(
-                        selected = selectedTab == tab,
-                        onClick = { selectedTab = tab },
-                        text = { Text(text = tab.title, fontSize = 11.sp) },
-                        icon = { Icon(imageVector = tab.icon, contentDescription = tab.title, modifier = Modifier.size(20.dp)) },
-                        selectedContentColor = CyanNeon,
-                        unselectedContentColor = TextMuted
-                    )
-                }
-            }
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .background(BgDark)
-        ) {
-            // 1. Thanh Header chính
-            HeaderBar(
-                isConnected = isConnected,
-                isScanning = isScanning,
-                onConnectClick = onRequestPermissions
-            )
-
-            // 2. Thanh trạng thái Telemetry
-            TelemetryBar(state = telemetry)
-
-            // 3. Card điều khiển nhanh nguồn & độ sáng
-            BrightnessPowerCard(
-                brightness = telemetry.brightness,
-                onBrightnessChange = { newBri ->
-                    bleManager.sendCommand("bright $newBri")
-                },
-                onPowerToggle = {
-                    if (telemetry.mode == 9) {
-                        bleManager.setEffect(1) // Bật lại Mode 1 (Lava)
-                    } else {
-                        bleManager.setEffect(9) // Tắt đèn (Standby)
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Filled.Lightbulb,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = "LED Lamp 360°",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
-                }
-            )
-
-            // 4. Nội dung từng Tab
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            ) {
-                when (selectedTab) {
-                ScreenTab.MODES -> {
-                    ModesGrid(
-                        currentMode = telemetry.mode,
-                        onModeSelect = { modeId ->
-                            bleManager.setEffect(modeId, speed = 50, brightness = telemetry.brightness)
-                        }
-                    )
-                }
-                ScreenTab.COLOR -> {
-                    ColorPaletteSection(
-                        onColorSelected = { r, g, b ->
-                            bleManager.setStaticColor(r, g, b, telemetry.brightness)
-                        }
-                    )
-                }
-                ScreenTab.MARQUEE -> {
-                    MarqueeSection(
-                        onSendText = { text ->
-                            bleManager.sendMarqueeText(text)
-                            scope.launch { prefsRepository.saveLastMarquee(text) }
-                        }
-                    )
-                }
-                ScreenTab.PIXEL -> {
-                    PixelArtCanvasSection(
-                        onSendCanvas = { canvas ->
-                            bleManager.sendPixelCanvas(canvas, telemetry.brightness)
-                        }
-                    )
-                }
-                ScreenTab.WEATHER -> {
-                    WeatherSection(
-                        weatherData = weatherData,
-                        onCitySelected = { city ->
-                            scope.launch { prefsRepository.saveSelectedCity(city) }
+                },
+                actions = {
+                    // M3 Connection Status Chip
+                    FilterChip(
+                        selected = isConnected,
+                        onClick = onRequestPermissions,
+                        label = {
+                            Text(
+                                text = if (isConnected) "Đã kết nối" else (if (isScanning) "Đang tìm..." else "Kết nối"),
+                                style = MaterialTheme.typography.labelMedium
+                            )
                         },
-                        onSyncWeatherNow = {
-                            onSyncNow()
-                            scope.launch(Dispatchers.IO) {
-                                val data = weatherRepository.fetchWeather(selectedCity)
-                                withContext(Dispatchers.Main) {
-                                    weatherData = data
-                                }
+                        leadingIcon = {
+                            if (isScanning) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(12.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isConnected) GreenJade else MaterialTheme.colorScheme.outline
+                                        )
+                                )
                             }
                         },
-                        onPreviewModeSelect = { modeId ->
-                            bleManager.setEffect(modeId, speed = 50)
-                        }
+                        modifier = Modifier.padding(end = 8.dp)
                     )
-                }
-                ScreenTab.NOTIF -> {
-                    NotificationMappingSection(
-                        configs = notifConfigs,
-                        onConfigToggle = { pkg, enabled ->
-                            val updated = notifConfigs.map { if (it.packageName == pkg) it.copy(isEnabled = enabled) else it }
-                            scope.launch { prefsRepository.saveNotificationConfigs(updated) }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        },
+        bottomBar = {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                tonalElevation = 3.dp
+            ) {
+                MainDestination.entries.forEach { destination ->
+                    val isSelected = currentDestination == destination
+                    NavigationBarItem(
+                        selected = isSelected,
+                        onClick = { currentDestination = destination },
+                        icon = {
+                            Icon(
+                                imageVector = if (isSelected) destination.selectedIcon else destination.unselectedIcon,
+                                contentDescription = destination.title
+                            )
                         },
-                        onTestFlash = { r, g, b ->
-                            bleManager.sendNotificationInterrupt(r, g, b, count = 3, delay10ms = 15)
+                        label = {
+                            Text(
+                                text = destination.title,
+                                style = MaterialTheme.typography.labelSmall
+                            )
                         },
-                        onOpenPermissionSettings = onOpenNotificationSettings
-                    )
-                }
-                ScreenTab.SENSORS -> {
-                    SensorSection(
-                        state = telemetry,
-                        logs = logs,
-                        onTriggerPomodoro = { bleManager.triggerPomodoro() },
-                        onSyncNow = onSyncNow,
-                        onRequestBatteryOptimization = onRequestBatteryOptimization
-                    )
-                }
-                ScreenTab.OTA -> {
-                    OtaSection(
-                        bleManager = bleManager,
-                        onPickFirmwareFile = onPickFirmwareFile
+                        colors = NavigationBarItemDefaults.colors(
+                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     )
                 }
             }
         }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .background(MaterialTheme.colorScheme.surface)
+        ) {
+            Crossfade(
+                targetState = currentDestination,
+                label = "DestinationCrossfade"
+            ) { destination ->
+                when (destination) {
+                    MainDestination.STUDIO -> {
+                        StudioScreen(
+                            telemetry = telemetry,
+                            effectSpeed = effectSpeed,
+                            onBrightnessChange = { newBri ->
+                                bleManager.setBrightness(newBri)
+                            },
+                            onSpeedChange = { newSpeed ->
+                                scope.launch { prefsRepository.saveEffectSpeed(newSpeed) }
+                            },
+                            onPowerToggle = {
+                                if (telemetry.mode == 9) {
+                                    bleManager.setEffect(1, speed = effectSpeed, brightness = telemetry.brightness)
+                                    Toast.makeText(context, "Đã bật đèn (Lửa cuộn 360°)", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    bleManager.setEffect(9)
+                                    Toast.makeText(context, "Đã chuyển sang chế độ chờ", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            onModeSelect = { modeId ->
+                                bleManager.setEffect(modeId, speed = effectSpeed, brightness = telemetry.brightness)
+                                val modeName = LampConstants.MODES.find { it.id == modeId }?.name ?: "Chế độ $modeId"
+                                if (!isConnected) {
+                                    Toast.makeText(context, "Đã chọn: $modeName (Chưa kết nối)", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        )
+                    }
+
+                    MainDestination.CREATIVE -> {
+                        CreativeScreen(
+                            initialMarqueeText = lastMarquee,
+                            onColorSelected = { r, g, b ->
+                                bleManager.setStaticColor(r, g, b, telemetry.brightness)
+                                if (!isConnected) {
+                                    Toast.makeText(context, "Đã chọn màu RGB($r, $g, $b) (Chưa kết nối)", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            onSendMarqueeText = { text, r, g, b ->
+                                if (r != null && g != null && b != null) {
+                                    bleManager.sendCommand("text $r $g $b $text")
+                                } else {
+                                    bleManager.sendMarqueeText(text)
+                                }
+                                scope.launch { prefsRepository.saveLastMarquee(text) }
+                                Toast.makeText(context, if (isConnected) "Đã gửi chữ lên đèn: $text" else "Đã lưu chữ: $text (Chưa kết nối)", Toast.LENGTH_SHORT).show()
+                            },
+                            onSendSlot = { slot, r, g, b, rows ->
+                                bleManager.sendSlotBitmap(slot, r, g, b, rows)
+                                Toast.makeText(context, if (isConnected) "Đã gửi Mặt $slot lên đèn" else "Chưa kết nối Bluetooth!", Toast.LENGTH_SHORT).show()
+                            },
+                            onSendAllSlots = { slots ->
+                                scope.launch {
+                                    bleManager.sendAllFourSlots(slots)
+                                    Toast.makeText(context, if (isConnected) "Đã gửi 4 Mặt lên đèn (Mode 11)" else "Chưa kết nối Bluetooth!", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            onSendFullCanvas = { fullCanvasState ->
+                                scope.launch {
+                                    bleManager.sendFullCanvas32x8(fullCanvasState)
+                                    Toast.makeText(context, if (isConnected) "Đã gửi Canvas 32x8 lên đèn" else "Chưa kết nối Bluetooth!", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            onActivateMode11 = {
+                                bleManager.setEffect(11)
+                                Toast.makeText(context, "Đã kích hoạt Chế độ 11: 4 Mặt Tùy chỉnh", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
+
+                    MainDestination.ROUTINES -> {
+                        RoutinesScreen(
+                            routineConfig = smartRoutineConfig,
+                            weatherData = weatherData,
+                            onUpdateRoutine = { updated ->
+                                scope.launch { prefsRepository.saveSmartRoutines(updated) }
+                            },
+                            onCitySelected = { city ->
+                                scope.launch { prefsRepository.saveSelectedCity(city) }
+                            },
+                            onSyncWeatherNow = {
+                                onSyncNow()
+                                scope.launch {
+                                    val data = withContext(Dispatchers.IO) {
+                                        weatherRepository.fetchWeather(selectedCity)
+                                    }
+                                    weatherData = data
+                                    if (bleManager.isConnected.value) {
+                                        bleManager.sendWeather(data.temp, data.weatherId)
+                                    }
+                                    Toast.makeText(context, "Đã cập nhật: ${data.cityName} ${data.temp}°C (${data.weatherName})", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            onPreviewModeSelect = { modeId ->
+                                bleManager.setEffect(modeId, speed = effectSpeed)
+                            },
+                            onTriggerSunriseDemo = {
+                                scope.launch {
+                                    Toast.makeText(context, "Bắt đầu chạy thử Bình minh (Demo 10s)...", Toast.LENGTH_SHORT).show()
+                                    bleManager.setStaticColor(140, 25, 0, 8)
+                                    delay(2000)
+                                    bleManager.setStaticColor(210, 60, 5, 25)
+                                    delay(2000)
+                                    bleManager.setStaticColor(255, 120, 15, 50)
+                                    delay(2000)
+                                    bleManager.setStaticColor(255, 190, 40, 75)
+                                    delay(2000)
+                                    bleManager.setEffect(12) // Chuyển sang Mode 12 (Đồng hồ 360°)
+                                    Toast.makeText(context, "Hoàn tất kịch bản thức dậy!", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            onActivateBedtimeRoutine = {
+                                scope.launch {
+                                    bleManager.setEffect(6) // Mode 6: Night Breathing
+                                    bleManager.sendCommand("bright 10")
+                                    Toast.makeText(context, "Đã bật Đèn ngủ (Mode 6 nhịp thở). Đèn sẽ tự tắt sau ${smartRoutineConfig.bedtimeDurationMin} phút.", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        )
+                    }
+
+                    MainDestination.DEVICE -> {
+                        DeviceScreen(
+                            telemetry = telemetry,
+                            logs = logs,
+                            bleManager = bleManager,
+                            notifConfigs = notifConfigs,
+                            onSaveAppConfig = { updated ->
+                                val updatedList = notifConfigs.map { if (it.packageName == updated.packageName) updated else it }
+                                scope.launch { prefsRepository.saveNotificationConfigs(updatedList) }
+                            },
+                            onAddAppConfig = { newApp ->
+                                val updatedList = notifConfigs.filter { it.packageName != newApp.packageName } + newApp
+                                scope.launch { prefsRepository.saveNotificationConfigs(updatedList) }
+                            },
+                            onDeleteAppConfig = { pkg ->
+                                val updatedList = notifConfigs.filter { it.packageName != pkg }
+                                scope.launch { prefsRepository.saveNotificationConfigs(updatedList) }
+                            },
+                            onConfigToggle = { pkg, enabled ->
+                                val updatedList = notifConfigs.map { if (it.packageName == pkg) it.copy(isEnabled = enabled) else it }
+                                scope.launch { prefsRepository.saveNotificationConfigs(updatedList) }
+                            },
+                            onTestFlash = { r, g, b, count ->
+                                bleManager.sendNotificationInterrupt(r, g, b, count = count, delay10ms = 15)
+                            },
+                            onOpenNotificationSettings = onOpenNotificationSettings,
+                            onTriggerPomodoro = { bleManager.triggerPomodoro() },
+                            onSyncNow = onSyncNow,
+                            onRequestBatteryOptimization = onRequestBatteryOptimization,
+                            onPickFirmwareFile = onPickFirmwareFile
+                        )
+                    }
+                }
+            }
         }
     }
 }

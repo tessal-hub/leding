@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import com.esp32.ledmatrix360.model.AppNotificationConfig
 import com.esp32.ledmatrix360.model.LampConstants
+import com.esp32.ledmatrix360.model.SmartRoutineConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
@@ -19,6 +20,8 @@ class PreferencesRepository(private val context: Context) {
         private val KEY_SELECTED_CITY = stringPreferencesKey("selected_city")
         private val KEY_NOTIF_CONFIGS = stringPreferencesKey("notif_configs_json")
         private val KEY_LAST_MARQUEE   = stringPreferencesKey("last_marquee_text")
+        private val KEY_ROUTINES_CONFIG = stringPreferencesKey("smart_routines_config")
+        private val KEY_EFFECT_SPEED   = intPreferencesKey("effect_speed")
 
         @Volatile
         private var INSTANCE: PreferencesRepository? = null
@@ -58,7 +61,8 @@ class PreferencesRepository(private val context: Context) {
                             r = obj.getInt("r"),
                             g = obj.getInt("g"),
                             b = obj.getInt("b"),
-                            isEnabled = obj.optBoolean("enabled", true)
+                            isEnabled = obj.optBoolean("enabled", true),
+                            flashCount = obj.optInt("count", 3)
                         )
                     )
                 }
@@ -80,6 +84,7 @@ class PreferencesRepository(private val context: Context) {
                 put("g", item.g)
                 put("b", item.b)
                 put("enabled", item.isEnabled)
+                put("count", item.flashCount)
             }
             array.put(obj)
         }
@@ -95,6 +100,57 @@ class PreferencesRepository(private val context: Context) {
     suspend fun saveLastMarquee(text: String) {
         context.dataStore.edit { prefs ->
             prefs[KEY_LAST_MARQUEE] = text
+        }
+    }
+
+    val smartRoutinesFlow: Flow<SmartRoutineConfig> = context.dataStore.data.map { prefs ->
+        val jsonStr = prefs[KEY_ROUTINES_CONFIG]
+        if (jsonStr.isNullOrEmpty()) {
+            SmartRoutineConfig()
+        } else {
+            try {
+                val obj = JSONObject(jsonStr)
+                SmartRoutineConfig(
+                    sunriseEnabled = obj.optBoolean("sunriseEnabled", false),
+                    sunriseHour = obj.optInt("sunriseHour", 6),
+                    sunriseMinute = obj.optInt("sunriseMinute", 30),
+                    sunriseDurationMin = obj.optInt("sunriseDurationMin", 15),
+                    bedtimeEnabled = obj.optBoolean("bedtimeEnabled", false),
+                    bedtimeHour = obj.optInt("bedtimeHour", 23),
+                    bedtimeMinute = obj.optInt("bedtimeMinute", 0),
+                    bedtimeDurationMin = obj.optInt("bedtimeDurationMin", 30),
+                    autoWeatherSync = obj.optBoolean("autoWeatherSync", false)
+                )
+            } catch (e: Exception) {
+                SmartRoutineConfig()
+            }
+        }
+    }
+
+    suspend fun saveSmartRoutines(config: SmartRoutineConfig) {
+        val obj = JSONObject().apply {
+            put("sunriseEnabled", config.sunriseEnabled)
+            put("sunriseHour", config.sunriseHour)
+            put("sunriseMinute", config.sunriseMinute)
+            put("sunriseDurationMin", config.sunriseDurationMin)
+            put("bedtimeEnabled", config.bedtimeEnabled)
+            put("bedtimeHour", config.bedtimeHour)
+            put("bedtimeMinute", config.bedtimeMinute)
+            put("bedtimeDurationMin", config.bedtimeDurationMin)
+            put("autoWeatherSync", config.autoWeatherSync)
+        }
+        context.dataStore.edit { prefs ->
+            prefs[KEY_ROUTINES_CONFIG] = obj.toString()
+        }
+    }
+
+    val effectSpeedFlow: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[KEY_EFFECT_SPEED] ?: 50
+    }
+
+    suspend fun saveEffectSpeed(speed: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_EFFECT_SPEED] = speed
         }
     }
 }

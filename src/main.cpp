@@ -20,6 +20,9 @@
  */
 
 void setup() {
+  // 0. Khóa xung nhịp CPU ở 240MHz tối đa cho chip ESP32-D0WDQ6 Dual-Core
+  setCpuFrequencyMhz(240);
+
   // 1. Khởi tạo UART Debug & Serial CLI Console
   initUartDebug();
 
@@ -28,6 +31,9 @@ void setup() {
 
   // 3. Khởi tạo dải LED 256 bóng với độ sáng đã lưu từ Flash
   initDisplay(currentBrightness);
+
+  // 3b. Khởi tạo & khôi phục dữ liệu 4 Ô Bitmap từ Flash NVS
+  initSlots();
 
   // 4. Khởi tạo Bluetooth Low Energy (BLE) Nordic UART Service
   initBleService();
@@ -38,14 +44,29 @@ void setup() {
 
 void loop() {
   processDeferredSettingsSave();
+  processDeferredSlotsSave();
 
   // -1. Chế độ nạp Firmware OTA qua Bluetooth BLE
   if (isOtaModeActive) {
+    unsigned long otaWaitStart = millis();
     while (isOtaModeActive) {
       handleBleService();
       handleUartDebug();
       checkButtonAndMPU();
       processDeferredSettingsSave();
+      processDeferredSlotsSave();
+
+      // Nếu không có thiết bị kết nối BLE và không đang nạp OTA trong 30 giây -> tự động thoát
+      if (!isBleConnected() && !isBleOtaInProgress()) {
+        if (millis() - otaWaitStart > 30000) {
+          dbgLog(TAG_SYS, "OTA BLE: Hết thời gian chờ kết nối (30s) -> Tự động quay về chế độ bình thường.");
+          exitBleOtaMode();
+          break;
+        }
+      } else {
+        otaWaitStart = millis();
+      }
+
       delay(5);
     }
     return;
@@ -88,6 +109,7 @@ void loop() {
   if (currentMode == 9) {
     clearMatrix();
     dbgLog(TAG_SYS, "Đèn đang ở chế độ Tắt (Mode 9). Chạm nút hoặc gõ lệnh UART/BLE để bật lại.");
+
     while (currentMode == 9) {
       if (checkButtonAndMPU()) break;
       if (isOtaModeActive) break;
@@ -98,16 +120,7 @@ void loop() {
         break;
       }
       processDeferredSettingsSave();
-
-      // Light Sleep tiết kiệm pin tối đa khi không có thiết bị kết nối BLE
-      if (!isBleConnected()) {
-        gpio_wakeup_enable((gpio_num_t)TOUCH_PIN, GPIO_INTR_HIGH_LEVEL);
-        esp_sleep_enable_gpio_wakeup();
-        esp_sleep_enable_timer_wakeup(150 * 1000); // Thức dậy mỗi 150ms để kiểm tra ngoại vi
-        esp_light_sleep_start();
-      } else {
-        delay(30);
-      }
+      delay(20);
     }
     return;
   }
@@ -117,49 +130,52 @@ void loop() {
     // 1. Lava Noise (Đèn trang trí không chán)
     effectLavaNoise(14000);
     if (currentMode != 0) return;
-    clearMatrix();
-    if (delayWithTouch(250)) return;
+    fadeTransition(240);
 
     // 2. Edge Light (Đèn viền tối giản cao cấp)
     effectEdgeLight(12000);
     if (currentMode != 0) return;
-    clearMatrix();
-    if (delayWithTouch(250)) return;
+    fadeTransition(240);
 
     // 3. Face Wave (Sóng nhịp chuyển sắc 4 mặt hộp)
     effectFaceWave(12000);
     if (currentMode != 0) return;
-    clearMatrix();
-    if (delayWithTouch(250)) return;
+    fadeTransition(240);
 
     // 4. Tilt Glow MPU (Tương tác bám góc nghiêng & lắc bừng sáng)
     effectTiltGlow(12000);
     if (currentMode != 0) return;
-    clearMatrix();
-    if (delayWithTouch(250)) return;
+    fadeTransition(240);
 
     // 5. Water Physics MPU (Showpiece vật lý nước & giọt bắn)
     effectWaterPhysics(12000);
     if (currentMode != 0) return;
-    clearMatrix();
-    if (delayWithTouch(250)) return;
+    fadeTransition(240);
 
     // 6. Night Breathing (Đèn ngủ êm dịu thư giãn)
     effectBreathingGradient(10000);
     if (currentMode != 0) return;
-    clearMatrix();
-    if (delayWithTouch(250)) return;
+    fadeTransition(240);
 
     // 7. Aurora Flow (Cực quang uốn lượn tím - cyan)
     effectAurora(10000);
     if (currentMode != 0) return;
-    clearMatrix();
-    if (delayWithTouch(400)) return;
+    fadeTransition(240);
+
+    // 8. Heartbeat Pulse (Nhịp đập trái tim lãng mạn)
+    effectHeartbeatPulse(10000);
+    if (currentMode != 0) return;
+    fadeTransition(240);
+
+    // 9. Love Ripple (Sóng tình yêu mơ mộng)
+    effectLoveRipple(10000);
+    if (currentMode != 0) return;
+    fadeTransition(240);
 
     return;
   }
 
-  // 3. Các chế độ cố định (Mode 1 -> 8): Chạy liên tục cho đến khi bấm chuyển Mode
+  // 3. Các chế độ cố định (Mode 1 -> 14): Chạy liên tục cho đến khi bấm chuyển Mode
   switch (currentMode) {
     case 1:
       // Mode 1: Lava Noise - Đèn trang trí mặc định
@@ -203,6 +219,26 @@ void loop() {
     case 10:
       // Mode 10: Màu tĩnh tùy chọn theo App (Static Color)
       effectStaticColor();
+      break;
+
+    case 11:
+      // Mode 11: Hiển thị 4 ô Bitmap tùy biến độc lập
+      effectFourSlotsCustom(60000);
+      break;
+
+    case 12:
+      // Mode 12: Đồng hồ để bàn 360 độ kỹ thuật số & thời tiết (Desk Clock)
+      effectDeskClock(60000);
+      break;
+
+    case 13:
+      // Mode 13: Heartbeat Pulse - Nhịp đập trái tim lãng mạn
+      effectHeartbeatPulse(60000);
+      break;
+
+    case 14:
+      // Mode 14: Love Ripple - Sóng tình yêu lan tỏa
+      effectLoveRipple(60000);
       break;
 
   }

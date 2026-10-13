@@ -56,7 +56,7 @@ class LampNotificationListener : NotificationListenerService() {
 
                 // 3. Phân loại màu đèn theo cấu hình người dùng hoặc mặc định
                 val (r, g, b, count) = when {
-                    matchedConfig != null -> NotiFlashPattern(matchedConfig.r, matchedConfig.g, matchedConfig.b, 3)
+                    matchedConfig != null -> NotiFlashPattern(matchedConfig.r, matchedConfig.g, matchedConfig.b, matchedConfig.flashCount)
                     pkg.contains("dialer") || pkg.contains("telecom") || pkg.contains("incallui") -> NotiFlashPattern(255, 20, 20, 5)
                     pkg == "com.zing.zalo" -> NotiFlashPattern(0, 140, 255, 3)
                     pkg == "com.facebook.orca" -> NotiFlashPattern(180, 40, 240, 3)

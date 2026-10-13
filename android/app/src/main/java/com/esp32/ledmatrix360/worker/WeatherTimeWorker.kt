@@ -62,15 +62,19 @@ class WeatherTimeWorker(
         try {
             val selectedCity = prefs.selectedCityFlow.first()
             val weatherData = weatherRepo.fetchWeather(selectedCity)
+            val routineConfig = prefs.smartRoutinesFlow.first()
 
             if (ble.isConnected.value) {
-                // Gửi Frame 0x04 [Temp, Weather_ID]
+                // Gửi Frame 0x04 [Temp, Weather_ID] cho đèn hiển thị
                 ble.sendWeather(weatherData.temp, weatherData.weatherId)
 
-                // Đổi Mode hoạt hình tương ứng thời tiết
-                ble.setEffect(weatherData.recommendedModeId, speed = 50)
+                // Chỉ đổi Mode hoạt hình NẾU người dùng đã kích hoạt tự động theo thời tiết
+                if (routineConfig.autoWeatherSync) {
+                    ble.setEffect(weatherData.recommendedModeId, speed = 50)
+                    Log.d(TAG, "Tự động đổi hiệu ứng theo thời tiết: Mode ${weatherData.recommendedModeId}")
+                }
 
-                Log.d(TAG, "Đã đồng bộ thời tiết thành công: ${weatherData.cityName} - ${weatherData.temp}°C, Weather ID: ${weatherData.weatherId}, Animation Mode: ${weatherData.recommendedModeId}")
+                Log.d(TAG, "Đã đồng bộ thời tiết thành công: ${weatherData.cityName} - ${weatherData.temp}°C, Weather ID: ${weatherData.weatherId}")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Lỗi đồng bộ thời tiết trong Worker: ${e.message}")

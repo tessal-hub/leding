@@ -26,3 +26,9 @@ void bleSendTelemetry(bool force = false);
 
 // Kiểm tra điện thoại có đang kết nối BLE hay không
 bool isBleConnected();
+
+// Hủy tiến trình nạp firmware OTA và khôi phục an toàn
+void abortBleOta();
+
+// Kiểm tra có đang trong tiến trình nhận dữ liệu OTA hay không
+bool isBleOtaInProgress();

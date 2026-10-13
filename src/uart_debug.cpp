@@ -45,9 +45,10 @@ void printUartHelp() {
   Serial.print(F(
     "\n=== LED MATRIX 360 CLI ===\n"
     " status, help, reboot\n"
-    " mode <0..10>, next, prev, bright <5..255>, save\n"
+    " mode <0..11>, next, prev, bright <5..255>, save\n"
     " mpu, touch, power, polarity [h/l], heartbeat <ms>\n"
-    " text <msg>, color <r g b>, clear, log <on/off>\n"
+    " text <msg>, color <r g b>, clear, weather <temp> <id>\n"
+    " slot <1..4> <preset|hex|clear> [r g b], slot show, slot list\n"
     "==========================\n\n"
   ));
 }
@@ -432,6 +433,65 @@ bool executeCliCommand(const char* cmdLine) {
     }
     startBleOtaMode();
     return true;
+  }
+
+  // 21. SLOT <1..4> <preset|hex|clear> [r g b] hoặc SLOT SHOW hoặc SLOT LIST
+  if (strcmp(cmd, "slot") == 0) {
+    if (arg != NULL) {
+      if (strcasecmp(arg, "show") == 0) {
+        currentMode = 11;
+        saveSettingsToFlash();
+        renderFourSlotsToMatrix();
+        strip.show();
+        dbgLog(TAG_CLI, "Chuyển sang Chế độ hiển thị 4 Ô Bitmap (Mode 11)");
+        return true;
+      }
+      if (strcasecmp(arg, "list") == 0) {
+        Serial.println("Danh sách Presets 8x8: 1, 2, 3, 4, heart, smile, star, bolt, fire, music, ghost, pacman");
+        return false;
+      }
+      int slotNum = 1;
+      char subCmd[32];
+      int r = 0, g = 0, b = 0;
+      if (sscanf(arg, "%d %31s %d %d %d", &slotNum, subCmd, &r, &g, &b) >= 2) {
+        if (slotNum >= 1 && slotNum <= NUM_SLOTS) {
+          uint8_t s = slotNum - 1;
+          if (strcasecmp(subCmd, "clear") == 0) {
+            clearSlot(s);
+            dbgLog(TAG_CLI, "Đã xóa toàn bộ pixel của Ô %d", slotNum);
+          } else if (strcasecmp(subCmd, "hex") == 0) {
+            char hexStr[32];
+            int hr = 0, hg = 220, hb = 255;
+            if (sscanf(arg, "%d hex %31s %d %d %d", &slotNum, hexStr, &hr, &hg, &hb) >= 2) {
+              if (strlen(hexStr) >= 16) {
+                uint8_t rows[8];
+                for (int i = 0; i < 8; i++) {
+                  char byteStr[3] = { hexStr[i*2], hexStr[i*2+1], '\0' };
+                  rows[i] = (uint8_t)strtol(byteStr, NULL, 16);
+                }
+                setSlotBitmap1Bit(s, hr, hg, hb, rows);
+                dbgLog(TAG_CLI, "Đã nạp Bitmap Hex cho Ô %d màu RGB(%d, %d, %d)", slotNum, hr, hg, hb);
+              }
+            }
+          } else {
+            if (applySlotPreset(s, subCmd, r, g, b)) {
+              dbgLog(TAG_CLI, "Đã gán Preset '%s' cho Ô %d", subCmd, slotNum);
+            } else {
+              dbgLog(TAG_CLI, "Không tìm thấy Preset '%s'. Gõ 'slot list' để xem danh sách.", subCmd);
+              return false;
+            }
+          }
+          currentMode = 11;
+          saveSettingsToFlash();
+          renderFourSlotsToMatrix();
+          strip.show();
+          markSlotsDirty();
+          return true;
+        }
+      }
+    }
+    dbgLog(TAG_CLI, "Cú pháp: slot <1..4> <preset|hex|clear> [r g b]  hoặc  slot show  hoặc  slot list");
+    return false;
   }
 
   // Lệnh không xác định

@@ -5,6 +5,7 @@
 #include "ble_service.h"
 #include <Wire.h>
 #include <Preferences.h>
+#include <esp_adc_cal.h>
 
 // Biến trạng thái toàn cục
 bool mpuFound = false;
@@ -34,6 +35,25 @@ static bool hasMovedDuringHold = false;
 bool chgStatActiveLow = CHG_STAT_ACTIVE_LOW;
 static unsigned long lastRedPulseTime = 0;
 static bool hasRedPulse = false;
+static bool wasPomodoroTilted = false;
+bool checkPomodoroOrientation();
+
+// eFuse VRef Calibration (Tối ưu hóa riêng cho chip ESP32-D0WDQ6)
+static esp_adc_cal_characteristics_t adcChars;
+static bool efuseCalAvailable = false;
+
+static void initAdcCal() {
+  esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 1100, &adcChars);
+  if (val_type == ESP_ADC_CAL_VAL_EFUSE_VREF) {
+    efuseCalAvailable = true;
+    dbgLog(TAG_PWR, "ADC eFuse: Kích hoạt thành công VRef hiệu chuẩn nhà máy của chip ESP32-D0WDQ6!");
+  } else if (val_type == ESP_ADC_CAL_VAL_EFUSE_TP) {
+    efuseCalAvailable = true;
+    dbgLog(TAG_PWR, "ADC eFuse: Kích hoạt Two-Point calibration của chip ESP32-D0WDQ6!");
+  } else {
+    dbgLog(TAG_PWR, "ADC eFuse: Khởi tạo hoàn tất bộ ước lượng ADC.");
+  }
+}
 
 uint16_t getStatPinMilliVolts() {
   uint32_t maxVal = 0;
@@ -42,11 +62,15 @@ uint16_t getStatPinMilliVolts() {
     if (raw > maxVal) maxVal = raw;
     delayMicroseconds(60);
   }
+  if (efuseCalAvailable) {
+    return (uint16_t)esp_adc_cal_raw_to_voltage(maxVal, &adcChars);
+  }
   return (uint16_t)((maxVal * 3300) / 4095);
 }
 
 bool isVbusPlugged() {
-  uint16_t mv = (analogRead(PIN_VBUS) * 3300) / 4095;
+  uint32_t raw = analogRead(PIN_VBUS);
+  uint16_t mv = efuseCalAvailable ? (uint16_t)esp_adc_cal_raw_to_voltage(raw, &adcChars) : (uint16_t)((raw * 3300) / 4095);
   return (mv >= 1200) || (digitalRead(PIN_VBUS) == HIGH);
 }
 
@@ -143,6 +167,10 @@ const char* getModeName(uint8_t mode) {
     case 8: return "DO HUONG DI DAY LED 0 -> 255 (Calibration Debug)";
     case 9: return "Tat den (Standby / Off)";
     case 10: return "Mau tinh tuy chon theo App (Static Color)";
+    case 11: return "Hien thi 4 o tuy bien (4-Slot Custom Bitmap)";
+    case 12: return "Dong ho de ban 360 do (Desk Clock)";
+    case 13: return "Nhip dap trai tim (Heartbeat Pulse - Lang man)";
+    case 14: return "Song tinh yeu lan toa (Love Ripple - Mo mong)";
     default: return "Khong xac dinh";
   }
 }
@@ -192,16 +220,32 @@ void loadSettingsFromFlash() {
 
 void initMPU6050() {
   Wire.begin(MPU_SDA_PIN, MPU_SCL_PIN);
-  delay(100);
+  Wire.setClock(400000); // Tối ưu hóa phần cứng: Nâng tốc độ I2C Bus lên 400kHz Fast Mode (nhanh gấp 4 lần 100kHz)
+  delay(50);
 
+  // 1. Đánh thức MPU-6050 & khóa xung nhịp thạch anh Gyro X (ổn định hơn dao động nội)
   Wire.beginTransmission(MPU_I2C_ADDR);
   Wire.write(0x6B); // PWR_MGMT_1
-  Wire.write(0x00); // Wake up
+  Wire.write(0x01); // Clock Source: PLL với trục Gyro X
   byte error = Wire.endTransmission();
 
   if (error == 0) {
     mpuFound = true;
-    dbgLog(TAG_MPU, "Tìm thấy MPU-6050 (SDA: GPIO %d, SCL: GPIO %d, Addr: 0x%02X)",
+
+    // 2. Kích hoạt bộ lọc phần cứng kỹ thuật số DLPF (Digital Low Pass Filter) tại 0x1A
+    // DLPF_CFG = 3 (~44Hz): Lọc sạch nhiễu rung tay, nhiễu nguồn và tiếng ồn vi mô
+    Wire.beginTransmission(MPU_I2C_ADDR);
+    Wire.write(0x1A); // CONFIG
+    Wire.write(0x03); // DLPF_CFG = 3
+    Wire.endTransmission();
+
+    // 3. Cấu hình thang đo gia tốc ±2g (16384 LSB/g) với độ nhạy tối đa
+    Wire.beginTransmission(MPU_I2C_ADDR);
+    Wire.write(0x1C); // ACCEL_CONFIG
+    Wire.write(0x00); // AFS_SEL = 0 (±2g)
+    Wire.endTransmission();
+
+    dbgLog(TAG_MPU, "Tìm thấy MPU-6050 (SDA: GPIO %d, SCL: GPIO %d, Addr: 0x%02X) [I2C Fast Mode: 400kHz, DLPF: 44Hz]",
            MPU_SDA_PIN, MPU_SCL_PIN, MPU_I2C_ADDR);
     dbgLog(TAG_MPU, "Giữ nút chạm để nghiêng điều chỉnh độ sáng [%d -> %d]",
            MIN_BRIGHTNESS, MAX_BRIGHTNESS);
@@ -215,6 +259,9 @@ void initSensors() {
   // Cảm biến chạm GPIO 5
   pinMode(TOUCH_PIN, INPUT_PULLDOWN);
   dbgLog(TAG_TOUCH, "Cảm biến Touch: Module Digital TTP223 tại GPIO %d", TOUCH_PIN);
+
+  // Khởi tạo ADC hiệu chuẩn eFuse phần cứng
+  initAdcCal();
 
   // Tuyến giám sát sạc pin IP2312
   pinMode(PIN_VBUS, INPUT);
@@ -230,6 +277,9 @@ void initSensors() {
 
   // Khởi tạo MPU-6050
   initMPU6050();
+  if (mpuFound) {
+    wasPomodoroTilted = checkPomodoroOrientation();
+  }
 }
 
 bool readMpuAccel(int16_t &ax, int16_t &ay, int16_t &az) {
@@ -238,8 +288,8 @@ bool readMpuAccel(int16_t &ax, int16_t &ay, int16_t &az) {
   static int16_t cachedAx = 0, cachedAy = 0, cachedAz = 0;
   static unsigned long lastMpuRead = 0;
 
-  // Cache gia tốc 25ms (40Hz): Dùng chung tức thì cho mọi module (Shake, Pomodoro, Tilt)
-  if (now - lastMpuRead < 25 && lastMpuRead != 0) {
+  // Cache gia tốc 10ms (100Hz): Phản hồi siêu tốc, mượt mà gấp 2.5 lần cho vật lý nước và góc nghiêng
+  if (now - lastMpuRead < 10 && lastMpuRead != 0) {
     ax = cachedAx;
     ay = cachedAy;
     az = cachedAz;
@@ -318,8 +368,7 @@ void startBleOtaMode() {
 
 void exitBleOtaMode() {
   if (!isOtaModeActive) return;
-  isOtaModeActive = false;
-  clearMatrix();
+  abortBleOta();
   dbgLog(TAG_SYS, "Thoát trạng thái OTA BLE. Quay về Mode [%d]", currentMode);
 }
 
@@ -391,14 +440,15 @@ bool checkButtonAndMPU() {
       dbgLog(TAG_TOUCH, "KHÓA ĐỘ SÁNG: Đã lưu cố định độ sáng %d/255 vào Flash", currentBrightness);
       return false;
     }
-    // BẤM NHẢ NHANH -> CHUYỂN MODE ĐÈN
+    // BẤM NHẢ NHANH -> CHUYỂN MODE ĐÈN (Debounced Wear-Leveling)
     else if (pressDuration >= 40 && pressDuration < HOLD_THRESHOLD_MS) {
       if (currentChargeState != DISCHARGING && !userOverrideCharging) {
         userOverrideCharging = true;
         dbgLog(TAG_PWR, "Người dùng chạm nút can thiệp: Bật đèn trong lúc cắm sạc!");
       }
+      fadeTransition(240);
       currentMode = (currentMode + 1) % TOTAL_MODES;
-      saveSettingsToFlash();
+      markSettingsChanged();
 
       dbgLog(TAG_TOUCH, "BẤM NHANH (%lums) -> Chuyển sang Mode [%d]: %s",
              pressDuration, currentMode, getModeName(currentMode));
@@ -441,6 +491,7 @@ bool delayWithTouch(uint16_t ms) {
       return true;
     }
     processDeferredSettingsSave();
+    processDeferredSlotsSave();
     delay(5);
   }
   return false;
@@ -453,13 +504,12 @@ bool isPomodoroActive = false;
 bool isEmergencyActive = false;
 bool pendingEmergencyFlashlight = false;
 bool pendingPomodoroTrigger = false;
-static bool wasPomodoroTilted = false;
 
 static uint8_t shakeCount = 0;
 static unsigned long lastShakeTime = 0;
 
 bool checkEmergencyShake() {
-  if (!mpuFound) return false;
+  if (!mpuFound || millis() < 3000) return false;
   int16_t ax, ay, az;
   if (!readMpuAccel(ax, ay, az)) return false;
 
@@ -497,7 +547,7 @@ bool checkPomodoroOrientation() {
 }
 
 bool checkPomodoroTrigger() {
-  if (!mpuFound) return false;
+  if (!mpuFound || millis() < 3000) return false;
   bool isTilted = checkPomodoroOrientation();
   bool trigger = (!wasPomodoroTilted && isTilted);
   wasPomodoroTilted = isTilted;

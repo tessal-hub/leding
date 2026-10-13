@@ -155,6 +155,13 @@ class BleManager(private val context: Context) {
                         }
                     }
                     log("Sẵn sàng giao tiếp với đèn qua Nordic UART Service!")
+                    // Tự động đồng bộ giờ hệ thống RTC
+                    val cal = java.util.Calendar.getInstance()
+                    val h = cal.get(java.util.Calendar.HOUR_OF_DAY)
+                    val m = cal.get(java.util.Calendar.MINUTE)
+                    val s = cal.get(java.util.Calendar.SECOND)
+                    sendTimeSync(h, m, s)
+                    log("-> Tự động đồng bộ giờ hệ thống: $h:$m:$s")
                 } else {
                     log("Không tìm thấy Nordic UART Service trên đèn!")
                 }
@@ -244,6 +251,10 @@ class BleManager(private val context: Context) {
     fun sendMarqueeText(text: String) {
         val cleanText = text.trim()
         if (cleanText.isNotEmpty()) {
+            _telemetryState.value = _telemetryState.value.copy(
+                mode = 9,
+                modeName = "Chữ chạy Marquee"
+            )
             sendCommand("text $cleanText")
         }
     }
@@ -281,13 +292,30 @@ class BleManager(private val context: Context) {
      * Kích hoạt Pomodoro 25p từ xa
      */
     fun triggerPomodoro() {
+        _telemetryState.value = _telemetryState.value.copy(
+            mode = 12,
+            modeName = "Đồng hồ Pomodoro"
+        )
         sendCommand("pomo")
+    }
+
+    /**
+     * Cập nhật độ sáng tức thì trong StateFlow và gửi lệnh BLE xuống ESP32
+     */
+    fun setBrightness(brightness: Int) {
+        val clamped = brightness.coerceIn(5, 255)
+        _telemetryState.value = _telemetryState.value.copy(brightness = clamped)
+        sendCommand("bright $clamped")
     }
 
     /**
      * Frame 0x01: Đổi màu tĩnh RGB tức thì [0x01, R, G, B, Brightness]
      */
     fun setStaticColor(r: Int, g: Int, b: Int, brightness: Int = 0) {
+        _telemetryState.value = _telemetryState.value.copy(
+            mode = 10,
+            modeName = "Màu tĩnh"
+        )
         sendBytes(byteArrayOf(0x01.toByte(), r.toByte(), g.toByte(), b.toByte(), brightness.toByte()))
     }
 
@@ -295,6 +323,25 @@ class BleManager(private val context: Context) {
      * Frame 0x02: Chuyển hiệu ứng [0x02, Effect_ID, Speed, Brightness, Palette_ID]
      */
     fun setEffect(effectId: Int, speed: Int = 50, brightness: Int = 0, paletteId: Int = 0) {
+        val modeNames = mapOf(
+            0 to "Ma trận mưa số",
+            1 to "Lửa cuộn 360°",
+            2 to "Đồng hồ Digital",
+            3 to "Nhịp điệu Âm nhạc",
+            4 to "Cầu vồng cực quang",
+            5 to "Plasma lượng tử",
+            6 to "Sao băng đêm",
+            7 to "Đom đóm phát sáng",
+            8 to "Đồng hồ cát",
+            9 to "Chữ chạy Marquee",
+            10 to "Màu tĩnh",
+            11 to "Tùy chỉnh 4 Ô",
+            12 to "Đồng hồ Pomodoro"
+        )
+        _telemetryState.value = _telemetryState.value.copy(
+            mode = effectId,
+            modeName = modeNames[effectId] ?: "Chế độ $effectId"
+        )
         sendBytes(byteArrayOf(0x02.toByte(), effectId.toByte(), speed.toByte(), brightness.toByte(), paletteId.toByte()))
     }
 
@@ -318,6 +365,85 @@ class BleManager(private val context: Context) {
     fun sendTimeSync(hour: Int, minute: Int, second: Int) {
         sendBytes(byteArrayOf(0x05.toByte(), hour.toByte(), minute.toByte(), second.toByte()))
     }
+
+    /**
+     * Frame 0x06: Gửi Bitmap 1-bit 8x8 cho Ô [1..4] kèm màu RGB: [0x06, Slot, R, G, B, Row0..Row7]
+     */
+    fun sendSlotBitmap(slot: Int, r: Int, g: Int, b: Int, rows: ByteArray) {
+        if (rows.size < 8) return
+        val packet = ByteArray(13)
+        packet[0] = 0x06.toByte()
+        packet[1] = slot.toByte() // 1..4
+        packet[2] = r.toByte()
+        packet[3] = g.toByte()
+        packet[4] = b.toByte()
+        System.arraycopy(rows, 0, packet, 5, 8)
+        sendBytes(packet)
+        log("-> Đã gửi Ô $slot Bitmap 8x8 RGB($r, $g, $b)")
+    }
+
+    /**
+     * Gửi toàn bộ 4 Ô lên đèn và chuyển sang Chế độ 11
+     */
+    suspend fun sendAllFourSlots(slots: List<com.esp32.ledmatrix360.model.SlotBitmapState>) {
+        if (!_isConnected.value) {
+            log("Chưa kết nối! Không thể gửi 4 Ô Bitmap.")
+            return
+        }
+        for (slotState in slots) {
+            val (r, g, b) = slotState.getDominantColor()
+            val rows = slotState.to1BitBitmap()
+            sendSlotBitmap(slotState.id, r, g, b, rows)
+            kotlinx.coroutines.delay(25)
+        }
+        kotlinx.coroutines.delay(50)
+        setEffect(11) // Bật Chế độ 11: 4-Slot Custom Display
+        log("-> Đã kích hoạt Mode 11 (Hiển thị 4 Ô Bitmap trên đèn)")
+    }
+
+    /**
+     * Gửi toàn bộ khung vẽ 32x8 lên đèn bằng cách chia thành 4 Ô 8x8
+     */
+    suspend fun sendFullCanvas32x8(canvasState: PixelCanvasState) {
+        if (!_isConnected.value) {
+            log("Chưa kết nối! Bỏ qua gửi Canvas 32x8.")
+            return
+        }
+        for (slotIdx in 0 until 4) {
+            val slotNum = slotIdx + 1
+            val startX = slotIdx * 8
+            val rows = ByteArray(8)
+            var sumR = 0
+            var sumG = 0
+            var sumB = 0
+            var count = 0
+
+            for (y in 0 until 8) {
+                var rowByte = 0
+                for (x in 0 until 8) {
+                    val c = canvasState.getPixel(startX + x, y)
+                    if (c != android.graphics.Color.BLACK) {
+                        rowByte = rowByte or (1 shl (7 - x))
+                        sumR += android.graphics.Color.red(c)
+                        sumG += android.graphics.Color.green(c)
+                        sumB += android.graphics.Color.blue(c)
+                        count++
+                    }
+                }
+                rows[y] = rowByte.toByte()
+            }
+
+            val r = if (count > 0) sumR / count else 0
+            val g = if (count > 0) sumG / count else 220
+            val b = if (count > 0) sumB / count else 255
+            sendSlotBitmap(slotNum, r, g, b, rows)
+            kotlinx.coroutines.delay(25)
+        }
+        kotlinx.coroutines.delay(50)
+        setEffect(11)
+        log("-> Đã gửi toàn bộ Canvas 32x8 lên đèn thành công!")
+    }
+
 
     /**
      * Nạp Firmware OTA qua BLE GATT

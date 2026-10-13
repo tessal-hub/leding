@@ -74,8 +74,11 @@
 // Mode 9: Tắt đèn (Standby / Off)
 // Mode 10: Màu tĩnh tùy chọn theo App (Static Color)
 // Mode 11: Hiển thị 4 ô tùy biến độc lập (4-Slot Custom Bitmap Display)
+// Mode 12: Đồng hồ để bàn 360° kỹ thuật số & thời tiết (Desk Clock 360°)
+// Mode 13: Nhịp đập trái tim (Heartbeat Pulse - Tình yêu lãng mạn)
+// Mode 14: Sóng tình yêu lan tỏa (Love Ripple - Dreamy romantic ripple)
 #define DEFAULT_MODE          1      // Khởi động mặc định vào Mode 1: Lava Noise
-#define TOTAL_MODES           12     // 12 chế độ (bao gồm màu tĩnh & 4 ô tùy biến)
+#define TOTAL_MODES           15     // 15 chế độ (bao gồm 2 hiệu ứng tình yêu mới)
 
 // ============================================================================
 // 6. CẤU HÌNH QUẢN LÝ NGUỒN & SẠC PIN (MODULE IP2312)

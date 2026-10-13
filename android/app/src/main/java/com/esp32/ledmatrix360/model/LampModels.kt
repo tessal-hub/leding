@@ -48,7 +48,8 @@ data class AppNotificationConfig(
     val r: Int,
     val g: Int,
     val b: Int,
-    val isEnabled: Boolean = true
+    val isEnabled: Boolean = true,
+    val flashCount: Int = 3
 )
 
 /**
@@ -61,7 +62,8 @@ data class WeatherData(
     val weatherIcon: String = "☀️",
     val weatherId: Int = 1, // 1: Nắng, 2: Mây, 3: Mưa, 4: Sấm chớp
     val recommendedModeId: Int = 1, // Mode tương ứng hiển thị hoạt hình
-    val cityName: String = "Hà Nội"
+    val cityName: String = "Hà Nội",
+    val lastUpdatedTime: Long = System.currentTimeMillis()
 )
 
 /**
@@ -93,6 +95,94 @@ class PixelCanvasState(
 }
 
 /**
+ * Trạng thái 1 ô Bitmap 8x8 (64 bóng LED, tương ứng 1 mặt của hộp đèn)
+ */
+class SlotBitmapState(
+    val id: Int, // 1..4
+    val pixels: IntArray = IntArray(64) { android.graphics.Color.BLACK }
+) {
+    fun setPixel(x: Int, y: Int, color: Int) {
+        if (x in 0..7 && y in 0..7) pixels[y * 8 + x] = color
+    }
+
+    fun getPixel(x: Int, y: Int): Int {
+        return if (x in 0..7 && y in 0..7) pixels[y * 8 + x] else android.graphics.Color.BLACK
+    }
+
+    fun clear() {
+        pixels.fill(android.graphics.Color.BLACK)
+    }
+
+    fun fill(color: Int) {
+        pixels.fill(color)
+    }
+
+    fun copy(): SlotBitmapState {
+        val s = SlotBitmapState(id)
+        System.arraycopy(pixels, 0, s.pixels, 0, 64)
+        return s
+    }
+
+    fun to1BitBitmap(): ByteArray {
+        val bytes = ByteArray(8)
+        for (y in 0..7) {
+            var row = 0
+            for (x in 0..7) {
+                if (getPixel(x, y) != android.graphics.Color.BLACK) {
+                    row = row or (1 shl (7 - x))
+                }
+            }
+            bytes[y] = row.toByte()
+        }
+        return bytes
+    }
+
+    fun getDominantColor(): Triple<Int, Int, Int> {
+        var sumR = 0
+        var sumG = 0
+        var sumB = 0
+        var count = 0
+        for (c in pixels) {
+            if (c != android.graphics.Color.BLACK) {
+                sumR += android.graphics.Color.red(c)
+                sumG += android.graphics.Color.green(c)
+                sumB += android.graphics.Color.blue(c)
+                count++
+            }
+        }
+        return if (count > 0) Triple(sumR / count, sumG / count, sumB / count) else Triple(0, 220, 255)
+    }
+}
+
+data class SlotIconPreset(
+    val name: String,
+    val iconEmoji: String,
+    val r: Int,
+    val g: Int,
+    val b: Int,
+    val rows: IntArray // 8 hàng, mỗi hàng là giá trị 8-bit
+)
+
+data class SmartRoutineConfig(
+    val sunriseEnabled: Boolean = false,
+    val sunriseHour: Int = 6,
+    val sunriseMinute: Int = 30,
+    val sunriseDurationMin: Int = 15,
+    val bedtimeEnabled: Boolean = false,
+    val bedtimeHour: Int = 23,
+    val bedtimeMinute: Int = 0,
+    val bedtimeDurationMin: Int = 30,
+    val autoWeatherSync: Boolean = false
+)
+
+data class FullCanvasPreset(
+    val name: String,
+    val iconEmoji: String,
+    val description: String,
+    val generator: (PixelCanvasState) -> Unit
+)
+
+/**
  * Mẫu vẽ Pixel Art 32x8 sẵn có
  */
 data class PixelPreset(
@@ -119,7 +209,93 @@ object LampConstants {
         LampMode(7, "Aurora Flow", "🌌", "Cực quang uốn lượn tím - cyan"),
         LampMode(8, "Dò dây LED", "🔍", "Calibration test 0 -> 255"),
         LampMode(9, "Tắt đèn", "💤", "Standby ngủ đông"),
-        LampMode(10, "Màu tĩnh", "🎨", "Màu tùy chọn từ bảng màu")
+        LampMode(10, "Màu tĩnh", "🎨", "Màu tùy chọn từ bảng màu"),
+        LampMode(11, "4 Ô Bitmap", "🖼️", "Tùy biến 4 ô riêng biệt theo 4 mặt"),
+        LampMode(12, "Đồng hồ 360°", "⏰", "Đồng hồ số để bàn & thời gian thực")
+    )
+
+    val SMART_ROUTINES_DEFAULT = SmartRoutineConfig()
+
+    val FULL_CANVAS_PRESETS = listOf(
+        FullCanvasPreset("Sóng Âm Equalizer", "🎵", "Cột sóng âm nhạc trải đều 4 mặt") { canvas ->
+            canvas.clear()
+            val heights = intArrayOf(2, 4, 6, 8, 7, 5, 3, 2, 4, 6, 7, 8, 5, 3, 2, 4, 6, 8, 7, 5, 3, 2, 5, 7, 8, 6, 4, 2, 3, 5, 7, 4)
+            for (x in 0 until 32) {
+                val h = heights[x]
+                for (y in (8 - h) until 8) {
+                    val color = when {
+                        y < 2 -> android.graphics.Color.RED
+                        y < 5 -> android.graphics.Color.YELLOW
+                        else -> android.graphics.Color.CYAN
+                    }
+                    canvas.setPixel(x, y, color)
+                }
+            }
+        },
+        FullCanvasPreset("Vũ Trụ Sao Băng", "✨", "Bầu trời đêm & các chòm sao lấp lánh") { canvas ->
+            canvas.clear()
+            val stars = listOf(
+                Pair(2, 1), Pair(5, 5), Pair(9, 2), Pair(12, 6), Pair(15, 3),
+                Pair(18, 1), Pair(21, 5), Pair(25, 2), Pair(28, 6), Pair(31, 3)
+            )
+            for ((x, y) in stars) {
+                canvas.setPixel(x, y, android.graphics.Color.WHITE)
+            }
+            // Dải ngân hà tím ở đáy
+            for (x in 0 until 32) {
+                canvas.setPixel(x, 7, android.graphics.Color.rgb(120, 40, 200))
+                if (x % 3 == 0) canvas.setPixel(x, 6, android.graphics.Color.rgb(0, 180, 255))
+            }
+        },
+        FullCanvasPreset("Cầu Vồng 360°", "🌈", "Dải chuyển sắc mượt mà vòng quanh trụ") { canvas ->
+            for (x in 0 until 32) {
+                val hue = (x * 360f / 32f)
+                val c = android.graphics.Color.HSVToColor(floatArrayOf(hue, 1.0f, 1.0f))
+                for (y in 1..6) {
+                    canvas.setPixel(x, y, c)
+                }
+            }
+        },
+        FullCanvasPreset("Nhịp Tim ECG", "💓", "Đường nhịp tim điện tâm đồ nối liền") { canvas ->
+            canvas.clear()
+            for (x in 0 until 32) {
+                val y = when (x % 8) {
+                    2 -> 3
+                    3 -> 1
+                    4 -> 6
+                    5 -> 2
+                    else -> 4
+                }
+                canvas.setPixel(x, y, android.graphics.Color.rgb(255, 30, 80))
+                canvas.setPixel(x, y + 1, android.graphics.Color.rgb(180, 10, 50))
+            }
+        },
+        FullCanvasPreset("Cyberpunk City", "🏙️", "Skyline thành phố tương lai rực rỡ") { canvas ->
+            canvas.clear()
+            val buildings = intArrayOf(3, 5, 2, 6, 4, 7, 3, 5, 4, 6, 2, 7, 5, 3, 6, 4, 3, 5, 2, 6, 4, 7, 3, 5, 4, 6, 2, 7, 5, 3, 6, 4)
+            for (x in 0 until 32) {
+                val bH = buildings[x]
+                for (y in (8 - bH) until 8) {
+                    val c = if ((x + y) % 2 == 0) android.graphics.Color.rgb(0, 240, 255) else android.graphics.Color.rgb(255, 0, 128)
+                    canvas.setPixel(x, y, c)
+                }
+            }
+        }
+    )
+
+    val SLOT_PRESETS = listOf(
+        SlotIconPreset("Số 1", "1️⃣", 0, 220, 255, intArrayOf(0x18, 0x38, 0x18, 0x18, 0x18, 0x18, 0x7E, 0x00)),
+        SlotIconPreset("Số 2", "2️⃣", 255, 180, 20, intArrayOf(0x3C, 0x66, 0x06, 0x0C, 0x18, 0x30, 0x7E, 0x00)),
+        SlotIconPreset("Số 3", "3️⃣", 20, 240, 100, intArrayOf(0x3C, 0x66, 0x06, 0x1C, 0x06, 0x66, 0x3C, 0x00)),
+        SlotIconPreset("Số 4", "4️⃣", 255, 60, 180, intArrayOf(0x0C, 0x1C, 0x2C, 0x4C, 0x7E, 0x0C, 0x0C, 0x00)),
+        SlotIconPreset("Trái Tim", "❤️", 255, 20, 60, intArrayOf(0x00, 0x66, 0xFF, 0xFF, 0xFF, 0x7E, 0x3C, 0x18)),
+        SlotIconPreset("Mặt Cười", "😊", 255, 215, 0, intArrayOf(0x3C, 0x42, 0xA5, 0x81, 0xA5, 0x99, 0x42, 0x3C)),
+        SlotIconPreset("Ngôi Sao", "⭐", 255, 165, 0, intArrayOf(0x18, 0x18, 0xFF, 0x7E, 0x3C, 0x66, 0xC3, 0x00)),
+        SlotIconPreset("Sấm Sét", "⚡", 255, 255, 0, intArrayOf(0x0C, 0x18, 0x30, 0x7E, 0x0C, 0x18, 0x20, 0x40)),
+        SlotIconPreset("Lửa", "🔥", 255, 70, 0, intArrayOf(0x10, 0x30, 0x78, 0x7C, 0xFE, 0xFE, 0x7C, 0x38)),
+        SlotIconPreset("Nốt Nhạc", "🎵", 155, 50, 255, intArrayOf(0x0E, 0x0A, 0x0A, 0x0A, 0x3A, 0x7A, 0x72, 0x00)),
+        SlotIconPreset("Con Ma", "👻", 0, 255, 255, intArrayOf(0x3C, 0x7E, 0xAB, 0xFF, 0xFF, 0xFF, 0xB5, 0x00)),
+        SlotIconPreset("Pacman", "👾", 255, 230, 0, intArrayOf(0x3C, 0x7E, 0xFF, 0xF8, 0xF0, 0xF8, 0x7E, 0x3C))
     )
 
     val PRESET_COLORS = listOf(

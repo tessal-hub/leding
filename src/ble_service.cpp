@@ -21,29 +21,61 @@ static bool otaInProgress = false;
 static uint32_t otaTotalSize = 0;
 static uint32_t otaBytesReceived = 0;
 static uint8_t otaLastPct = 0;
+static unsigned long lastOtaChunkTime = 0;
+
+void abortBleOta() {
+  if (otaInProgress) {
+    Update.abort();
+    otaInProgress = false;
+  }
+  isOtaModeActive = false;
+  displayOtaProgress(0, true);
+  clearMatrix();
+  dbgLog(TAG_SYS, "OTA BLE: Đã hủy tiến trình OTA an toàn.");
+}
+
+bool isBleOtaInProgress() {
+  return otaInProgress;
+}
 
 // Hàng đợi nhận lệnh an toàn đa luồng
 static std::queue<std::string> bleRxQueue;
 static portMUX_TYPE bleMux = portMUX_INITIALIZER_UNLOCKED;
 
-// Callbacks xử lý kết nối / ngắt kết nối
+// Callbacks xử lý kết nối / ngắt kết nối & Bảo mật Ghép đôi (Security / Bonding)
 class BleServerCallbacks: public NimBLEServerCallbacks {
-  void onConnect(NimBLEServer* pServer) {
+  void onConnect(NimBLEServer* pServer, ble_gap_conn_desc* desc) override {
     deviceConnected = true;
-    dbgLog(TAG_BLE, "Điện thoại đã kết nối Bluetooth BLE thành công!");
+    dbgLog(TAG_BLE, "Điện thoại đã kết nối Bluetooth BLE thành công! (MAC: %s)",
+           desc ? NimBLEAddress(desc->peer_ota_addr).toString().c_str() : "unknown");
   }
 
-  void onDisconnect(NimBLEServer* pServer) {
+  void onDisconnect(NimBLEServer* pServer, ble_gap_conn_desc* desc) override {
     deviceConnected = false;
     dbgLog(TAG_BLE, "Điện thoại đã ngắt kết nối BLE.");
-    if (otaInProgress) {
-      Update.abort();
-      otaInProgress = false;
-      isOtaModeActive = false;
-      displayOtaProgress(0, true);
-      dbgLog(TAG_SYS, "OTA BLE: Điện thoại ngắt kết nối đột ngột -> Đã hủy OTA an toàn.");
+    if (otaInProgress || isOtaModeActive) {
+      abortBleOta();
     }
+    // Bật lại quảng bá ngay lập tức để điện thoại quét lại được tức thì
     NimBLEDevice::startAdvertising();
+  }
+
+  uint32_t onPassKeyRequest() override {
+    dbgLog(TAG_BLE, "BLE Security: Yêu cầu Passkey -> 0");
+    return 0;
+  }
+
+  bool onConfirmPIN(uint32_t pin) override {
+    dbgLog(TAG_BLE, "BLE Security: Xác nhận PIN %u -> Chấp nhận (Just Works)", pin);
+    return true;
+  }
+
+  void onAuthenticationComplete(ble_gap_conn_desc* desc) override {
+    if (desc && desc->sec_state.bonded) {
+      dbgLog(TAG_BLE, "BLE Security: Ghép đôi (Bonding) thành công!");
+    } else {
+      dbgLog(TAG_BLE, "BLE Security: Xác thực kết nối hoàn tất.");
+    }
   }
 };
 
@@ -53,7 +85,9 @@ class BleRxCallbacks: public NimBLECharacteristicCallbacks {
     std::string rxValue = pCharacteristic->getValue();
     if (rxValue.length() > 0) {
       portENTER_CRITICAL(&bleMux);
-      bleRxQueue.push(rxValue);
+      if (bleRxQueue.size() < 40) {
+        bleRxQueue.push(rxValue);
+      }
       portEXIT_CRITICAL(&bleMux);
     }
   }
@@ -62,43 +96,74 @@ class BleRxCallbacks: public NimBLECharacteristicCallbacks {
 void initBleService() {
   dbgLog(TAG_BLE, "Khởi tạo dịch vụ BLE Nordic UART Service (Tên: %s)...", BLE_DEVICE_NAME);
 
-  // 1. Khởi tạo BLE Device
+  // 1. Khởi tạo BLE Device & Tăng công suất phát sóng tối đa (+9dBm)
   NimBLEDevice::init(BLE_DEVICE_NAME);
-  NimBLEDevice::setMTU(517); // Hỗ trợ trao đổi gói tin lớn đến 512 bytes
+  NimBLEDevice::setPower(ESP_PWR_LVL_P9); // Công suất phát tối đa +9dBm (xuyên vỏ hộp)
+  NimBLEDevice::setMTU(517);              // Hỗ trợ trao đổi gói tin lớn đến 512 bytes
 
-  // 2. Tạo BLE Server
+  // 2. Cấu hình bảo mật & ghép đôi (Hỗ trợ Ghép đôi "Just Works" tương thích tối đa với mọi máy)
+  // sc=false: Sử dụng Legacy Just Works để tránh lỗi SMP mismatch trên các dòng điện thoại
+  NimBLEDevice::setSecurityAuth(/*bonding=*/true, /*mitm=*/false, /*sc=*/false);
+  NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
+  NimBLEDevice::setSecurityInitKey(BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID);
+  NimBLEDevice::setSecurityRespKey(BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID);
+
+  // 3. Tạo BLE Server
   pServer = NimBLEDevice::createServer();
   pServer->setCallbacks(new BleServerCallbacks());
 
-  // 3. Tạo Nordic UART Service (NUS)
+  // 4. Tạo Nordic UART Service (NUS)
   NimBLEService *pService = pServer->createService(BLE_NUS_SERVICE_UUID);
 
-  // 4. Characteristic TX (Notify từ ESP32 -> App)
+  // 5. Characteristic TX (Notify từ ESP32 -> App)
   pTxCharacteristic = pService->createCharacteristic(
                         BLE_NUS_TX_UUID,
                         NIMBLE_PROPERTY::NOTIFY
                       );
 
-  // 5. Characteristic RX (Write từ App -> ESP32)
+  // 6. Characteristic RX (Write từ App -> ESP32)
   pRxCharacteristic = pService->createCharacteristic(
                         BLE_NUS_RX_UUID,
                         NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR
                       );
   pRxCharacteristic->setCallbacks(new BleRxCallbacks());
 
-  // 6. Khởi động Service
+  // 7. Khởi động Service
   pService->start();
 
-  // 7. Bật phát quảng bá (Advertising có giãn chu kỳ tiết kiệm radio)
+  // 8. Bật phát quảng bá Bluetooth
   NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
-  pAdvertising->addServiceUUID(BLE_NUS_SERVICE_UUID);
-  pAdvertising->setScanResponse(true);
-  pAdvertising->setMinInterval(160); // 160 * 0.625ms = 100ms
-  pAdvertising->setMaxInterval(320); // 320 * 0.625ms = 200ms
-  pAdvertising->start();
 
-  dbgLog(TAG_BLE, "BLE đã sẵn sàng! UUID Service: %s", BLE_NUS_SERVICE_UUID);
-  dbgLog(TAG_BLE, "Dùng app nRF Connect hoặc LightBlue trên điện thoại để quét '%s'.", BLE_DEVICE_NAME);
+  // Gói quảng bá chính (Primary Advertisement Packet - tối đa 31 bytes):
+  // Flags (3B) + 128-bit Service UUID (18B) + Tên "LED-360" (9B) = 30 bytes <= 31 bytes.
+  // QUAN TRỌNG CHO WINDOWS: Windows WinRT BLE API chỉ lọc Service UUID trong gói quảng bá chính!
+  NimBLEAdvertisementData advData;
+  advData.setFlags(0x06); // General Discoverable Mode + BR/EDR Not Supported
+  advData.setCompleteServices(NimBLEUUID(BLE_NUS_SERVICE_UUID));
+  advData.setName("LED-360");
+  pAdvertising->setAdvertisementData(advData);
+
+  // Gói phản hồi (Scan Response): Chứa TÊN ĐẦY ĐỦ "LED-MATRIX-360"
+  NimBLEAdvertisementData scanData;
+  scanData.setName(BLE_DEVICE_NAME);
+  pAdvertising->setScanResponseData(scanData);
+
+  pAdvertising->setScanResponse(true);
+  pAdvertising->setMinInterval(48);  // 48 * 0.625ms = 30ms (Quét cực nhạy, tức thì)
+  pAdvertising->setMaxInterval(80);  // 80 * 0.625ms = 50ms
+
+  bool started = pAdvertising->start();
+  if (!started) {
+    delay(100);
+    started = pAdvertising->start();
+  }
+
+  if (started) {
+    dbgLog(TAG_BLE, "BLE đã sẵn sàng! UUID Service: %s (TxPower: +9dBm)", BLE_NUS_SERVICE_UUID);
+    dbgLog(TAG_BLE, "Thiết bị '%s': ĐANG PHÁT SÓNG QUẢNG BÁ (Sẵn sàng kết nối).", BLE_DEVICE_NAME);
+  } else {
+    dbgLog(TAG_BLE, "CẢNH BÁO: pAdvertising->start() thất bại!");
+  }
 }
 
 void bleNotify(const char* data) {
@@ -176,6 +241,9 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
         if (raw.length() >= 2) {
           uint8_t m = (uint8_t)raw[1];
           if (m < TOTAL_MODES) {
+            if (m != currentMode) {
+              fadeTransition(240);
+            }
             currentMode = m;
             needInterrupt = true;
           }
@@ -210,8 +278,54 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
         }
         break;
       }
-      case 0x05: // Time Sync
+      case 0x05: { // Time Sync: [0x05, Hour, Minute, Second]
+        if (raw.length() >= 4) {
+          uint8_t h = (uint8_t)raw[1];
+          uint8_t m = (uint8_t)raw[2];
+          uint8_t s = (uint8_t)raw[3];
+          syncDeviceTime(h, m, s);
+          dbgLog(TAG_BLE, "Binary 0x05: Đồng bộ giờ %02d:%02d:%02d", h, m, s);
+        }
         break;
+      }
+      case 0x06: { // Slot Bitmap (1-Bit): [0x06, Slot (1..4), R, G, B, Row0..Row7 (8 bytes)]
+        if (raw.length() >= 13) {
+          uint8_t slot = (uint8_t)raw[1];
+          if (slot >= 1 && slot <= NUM_SLOTS) slot -= 1;
+          if (slot < NUM_SLOTS) {
+            uint8_t r = (uint8_t)raw[2];
+            uint8_t g = (uint8_t)raw[3];
+            uint8_t b = (uint8_t)raw[4];
+            const uint8_t* rows = (const uint8_t*)raw.data() + 5;
+            setSlotBitmap1Bit(slot, r, g, b, rows);
+            currentMode = 11;
+            renderFourSlotsToMatrix();
+            strip.show();
+            markSlotsDirty();
+            dbgLog(TAG_BLE, "Binary 0x06: Cập nhật Ô %d (Mặt %d) Bitmap 8x8 RGB(%d, %d, %d)",
+                   slot + 1, slot + 1, r, g, b);
+            needInterrupt = true;
+          }
+        }
+        break;
+      }
+      case 0x07: { // Slot Pixels RGB565 Chunk: [0x07, Slot (1..4), Chunk_Idx (0..3), Data...]
+        if (raw.length() >= 4) {
+          uint8_t slot = (uint8_t)raw[1];
+          if (slot >= 1 && slot <= NUM_SLOTS) slot -= 1;
+          if (slot < NUM_SLOTS) {
+            uint8_t chunkIdx = (uint8_t)raw[2];
+            setSlotPixelsRGB565(slot, chunkIdx, (const uint8_t*)raw.data() + 3, raw.length() - 3);
+            currentMode = 11;
+            renderFourSlotsToMatrix();
+            strip.show();
+            markSlotsDirty();
+            dbgLog(TAG_BLE, "Binary 0x07: Nạp Chunk RGB %d cho Ô %d", chunkIdx, slot + 1);
+            needInterrupt = true;
+          }
+        }
+        break;
+      }
       case 0x10: { // OTA Begin: [0x10, Size0, Size1, Size2, Size3 (Little Endian)]
         uint32_t fwSize = UPDATE_SIZE_UNKNOWN;
         if (raw.length() >= 5) {
@@ -223,12 +337,14 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
           otaTotalSize = fwSize;
           otaBytesReceived = 0;
           otaLastPct = 0;
+          lastOtaChunkTime = millis();
           isOtaModeActive = true;
           displayOtaProgress(1, false);
           bleNotify("{\"ota\":\"start\",\"res\":0}");
           needInterrupt = true;
         } else {
           otaInProgress = false;
+          isOtaModeActive = false;
           displayOtaProgress(0, true);
           char errBuf[64];
           snprintf(errBuf, sizeof(errBuf), "{\"ota\":\"error\",\"err\":%d}", Update.getError());
@@ -238,6 +354,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
       }
       case 0x11: { // OTA Data Chunk: [0x11, Payload...]
         if (otaInProgress && raw.length() > 1) {
+          lastOtaChunkTime = millis();
           size_t chunkSize = raw.length() - 1;
           size_t written = Update.write((uint8_t*)raw.data() + 1, chunkSize);
           if (written == chunkSize) {
@@ -254,6 +371,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
             dbgLog(TAG_SYS, "OTA BLE: Ghi Flash lỗi! (Đã ghi: %u / Gói: %u)", written, chunkSize);
             Update.abort();
             otaInProgress = false;
+            isOtaModeActive = false;
             displayOtaProgress(0, true);
             bleNotify("{\"ota\":\"error\",\"err\":101}");
           }
@@ -282,14 +400,9 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
         break;
       }
       case 0x13: { // OTA Abort: [0x13]
-        if (otaInProgress) {
-          Update.abort();
-          otaInProgress = false;
-        }
-        isOtaModeActive = false;
-        clearMatrix();
+        abortBleOta();
         bleNotify("{\"ota\":\"aborted\"}");
-        dbgLog(TAG_SYS, "Đã hủy tiến trình OTA BLE.");
+        dbgLog(TAG_SYS, "Đã hủy tiến trình OTA BLE theo yêu cầu.");
         break;
       }
     }
@@ -388,6 +501,40 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
       triggerWeatherUpdate((int8_t)temp, (uint8_t)wId);
       needInterrupt = true;
     }
+
+    // g. Cài đặt Ô 8x8 qua JSON: {"slot": 1, "p": "heart"} hoặc {"slot": 2, "clear": 1}
+    size_t posSlot = cmd.find("\"slot\":");
+    if (posSlot != std::string::npos) {
+      int s = atoi(cmd.c_str() + cmd.find_first_of("0123456789", posSlot));
+      if (s >= 1 && s <= NUM_SLOTS) s -= 1;
+      if (s >= 0 && s < NUM_SLOTS) {
+        size_t posPres = cmd.find("\"preset\":");
+        if (posPres == std::string::npos) posPres = cmd.find("\"p\":");
+        if (posPres != std::string::npos) {
+          size_t q1 = cmd.find('\"', posPres + 4);
+          if (q1 != std::string::npos) {
+            size_t q2 = cmd.find('\"', q1 + 1);
+            if (q2 != std::string::npos) {
+              std::string pName = cmd.substr(q1 + 1, q2 - q1 - 1);
+              applySlotPreset((uint8_t)s, pName.c_str());
+              currentMode = 11;
+              renderFourSlotsToMatrix();
+              strip.show();
+              markSlotsDirty();
+              needInterrupt = true;
+            }
+          }
+        }
+        if (cmd.find("\"clear\":") != std::string::npos) {
+          clearSlot((uint8_t)s);
+          currentMode = 11;
+          renderFourSlotsToMatrix();
+          strip.show();
+          markSlotsDirty();
+          needInterrupt = true;
+        }
+      }
+    }
   }
   // 2. NẾU LÀ LỆNH VĂN BẢN THUẦN (CLI Text Command): Ví dụ "mode 2", "bright 60", "text HELLO"
   else {
@@ -402,16 +549,21 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
 bool handleBleService() {
   bool needInterrupt = false;
 
-  // 1. Quản lý trạng thái kết nối & khôi phục phát quảng bá
+  // 0. Timeout bảo vệ an toàn khi nạp OTA BLE (quá 15s không có gói tin mới)
+  if (otaInProgress && (millis() - lastOtaChunkTime > 15000)) {
+    dbgLog(TAG_SYS, "OTA BLE: Quá thời gian chờ (15s không có dữ liệu) -> Tự động hủy!");
+    abortBleOta();
+    bleNotify("{\"ota\":\"timeout\"}");
+  }
+
+  // 1. Quản lý trạng thái kết nối
   if (!deviceConnected && oldDeviceConnected) {
-    delay(20);
-    pServer->startAdvertising();
-    dbgLog(TAG_BLE, "Đã bật lại quảng bá (Advertising) để điện thoại kết nối tiếp.");
     oldDeviceConnected = deviceConnected;
+    dbgLog(TAG_BLE, "Trạng thái BLE: Đã ngắt kết nối.");
   }
   if (deviceConnected && !oldDeviceConnected) {
     oldDeviceConnected = deviceConnected;
-    bleSendTelemetry(true); // Gửi telemetry ngay khi điện thoại vừa kết nối
+    lastTelemetryTime = millis(); // Bắt đầu chu kỳ gửi telemetry mới
   }
 
   // 2. Lấy lệnh từ hàng đợi RX ra thực thi

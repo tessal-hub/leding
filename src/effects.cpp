@@ -92,17 +92,24 @@ void effectFaceWave(uint32_t durationMs) {
       float pos = (x + 0.5f) / FACE_W;            // 0..4, phần nguyên = số mặt
       int f0 = (int)pos % FACES;
       int f1 = (f0 + 1) % FACES;
+      int f2 = (f1 + 1) % FACES;
       float k = smooth01(pos - floorf(pos));      // trộn màu mượt giữa 2 mặt kề nhau
       uint32_t base = lerpColor(pal[f0], pal[f1], k);
 
-      // nhịp sáng lệch pha theo từng mặt (mỗi mặt chậm hơn mặt trước 1/4 chu kỳ)
-      float wave = 0.5f + 0.5f * sinf(t - pos * (PI / 2.0f));
-      float bri = 0.12f + 0.88f * wave * wave;
+      // Hòa sắc loang màu tinh tế giữa các mặt kế cận (inter-face bleeding)
+      float bleed = 0.16f * (0.5f + 0.5f * sinf(pos * PI * 2.0f + t * 0.6f));
+      base = lerpColor(base, pal[f2], bleed);
 
       for (int y = 0; y < MATRIX_HEIGHT; y++) {
-        // làm sáng nhẹ ở giữa theo chiều dọc, tối dần mép trên/dưới
-        float v = 1.0f - fabsf((y - (MATRIX_HEIGHT - 1) / 2.0f) / (MATRIX_HEIGHT / 2.0f)) * 0.35f;
-        setPixelXY(x, y, strip.gamma32(scaleColor(base, bri * v)));
+        // Nhịp sóng kết hợp điều chế dọc uốn lượn mềm mại (2D vertical wave modulation)
+        float vertWave = 0.35f * sinf(y * 0.55f - t * 0.75f + pos * 0.8f);
+        float wave = 0.5f + 0.5f * sinf(t - pos * (PI / 2.0f) + vertWave);
+        float bri = 0.12f + 0.88f * wave * wave;
+
+        // Độ sáng vòm trung tâm theo chiều dọc với dao động gợn sóng nhẹ
+        float v = 1.0f - fabsf((y - (MATRIX_HEIGHT - 1) / 2.0f) / (MATRIX_HEIGHT / 2.0f)) * 0.30f;
+        v += 0.10f * sinf(y * 0.75f + t * 1.1f);
+        setPixelXY(x, y, strip.gamma32(scaleColor(base, constrain(bri * v, 0.0f, 1.0f))));
       }
     }
     strip.show();
@@ -116,25 +123,36 @@ void effectFaceWave(uint32_t durationMs) {
 // ============================================================================
 void effectEdgeLight(uint32_t durationMs) {
   unsigned long start = millis();
-  const uint32_t edgeCol = strip.Color(160, 200, 255);   // trắng lạnh
-  const uint32_t fillCol = strip.Color(10, 0, 40);       // nền tím rất tối
+  const uint32_t coolWhite = strip.Color(150, 195, 255);  // Trắng lạnh băng thanh
+  const uint32_t warmWhite = strip.Color(255, 215, 160);  // Trắng ấm sang trọng
+  const uint32_t fillCol   = strip.Color(10, 0, 40);      // Nền tím rất tối
+
+  // Tần số và độ lệch pha nhịp thở riêng biệt cho từng cạnh của hộp
+  const float edgeFreq[4]  = { 1.05f, 1.25f, 0.95f, 1.18f };
+  const float edgePhase[4] = { 0.00f, 1.80f, 3.40f, 5.10f };
 
   while (millis() - start < durationMs) {
     float t = (millis() - start) / 1000.0f;
-    float breath = 0.5f + 0.5f * sinf(t * 1.1f);
-    breath = 0.25f + 0.75f * breath * breath;
+
+    // Chuyển dịch nhiệt độ màu êm dịu theo thời gian (Cool White <-> Warm White)
+    float tempShift = 0.5f + 0.5f * sinf(t * 0.30f);
+    uint32_t curEdgeCol = lerpColor(coolWhite, warmWhite, tempShift);
 
     for (int x = 0; x < MATRIX_WIDTH; x++) {
-      // khoảng cách tới cạnh gần nhất (cạnh nằm ở x = 0, 8, 16, 24; wrap quanh hộp)
+      // Khoảng cách tới cạnh gần nhất (cạnh nằm ở x = 0, 8, 16, 24; wrap quanh hộp)
       float local = fmodf(x + 0.5f, MATRIX_WIDTH / 4.0f);              // 0..8 trong một mặt
       float d = fminf(local, (MATRIX_WIDTH / 4.0f) - local);           // 0 tại cạnh
-      float glow = expf(-d * 0.9f);                                    // vệt sáng tắt dần vào trong mặt
+      float glow = expf(-d * 0.9f);                                    // Vệt sáng tắt dần vào trong mặt
+      int edgeIdx = (int)((x + 0.5f) / (MATRIX_WIDTH / 4.0f + 0.0001f) + 0.5f) % 4;
+
+      // Nhịp thở hữu cơ riêng cho từng cạnh góc
+      float b = 0.5f + 0.5f * sinf(t * edgeFreq[edgeIdx] + edgePhase[edgeIdx]);
+      float edgeBreath = 0.25f + 0.75f * b * b;
 
       for (int y = 0; y < MATRIX_HEIGHT; y++) {
-        // nhịp chạy dọc theo cạnh, lệch pha theo từng cạnh
-        int edgeIdx = (int)((x + 0.5f) / (MATRIX_WIDTH / 4.0f + 0.0001f) + 0.5f) % 4;
-        float run = 0.65f + 0.35f * sinf(t * 2.0f + y * 0.5f + edgeIdx * 1.57f);
-        uint32_t c = lerpColor(fillCol, scaleColor(edgeCol, breath * run), glow);
+        // Nhịp chạy dọc theo cạnh với chu kỳ sóng mượt
+        float run = 0.65f + 0.35f * sinf(t * 2.1f + y * 0.55f + edgeIdx * 1.57f);
+        uint32_t c = lerpColor(fillCol, scaleColor(curEdgeCol, edgeBreath * run), glow);
         setPixelXY(x, y, strip.gamma32(c));
       }
     }
@@ -151,11 +169,16 @@ void effectLavaNoise(uint32_t durationMs) {
   float t = 0.0f;
   const int CELLS = 4;  // 4 ô tương ứng 4 mặt của hộp vuông
 
-  const uint32_t c0 = strip.Color(5, 0, 25);       // gần đen tím
-  const uint32_t c1 = strip.Color(150, 20, 140);   // magenta
-  const uint32_t c2 = strip.Color(255, 140, 60);   // cam ấm
+  const uint32_t c0 = strip.Color(5, 0, 25);       // Gần đen tím obsidian
 
   while (millis() - start < durationMs) {
+    // Xoay chuyển dải màu nhẹ nhàng theo thời gian (rotating palette hue)
+    float hueRot = t * 0.12f;
+    float h1 = 0.5f + 0.5f * sinf(hueRot);
+    float h2 = 0.5f + 0.5f * cosf(hueRot * 0.85f);
+    uint32_t curC1 = lerpColor(strip.Color(160, 20, 130), strip.Color(210, 30, 65), h1);  // Magenta sâu <-> Đỏ rực
+    uint32_t curC2 = lerpColor(strip.Color(255, 130, 45), strip.Color(255, 195, 65), h2); // Cam nham thạch <-> Vàng hổ phách
+
     for (int y = 0; y < MATRIX_HEIGHT; y++) {
       for (int x = 0; x < MATRIX_WIDTH; x++) {
         float nx = (float)x * CELLS / MATRIX_WIDTH;
@@ -163,13 +186,21 @@ void effectLavaNoise(uint32_t durationMs) {
         float n2 = noise3(nx * 2.0f, y * 0.7f + 5.0f,  t * 1.6f, CELLS * 2);
         float n  = n1 * 0.7f + n2 * 0.3f;
 
-        // đẩy tương phản để tạo "blob" rõ, nền tối rộng
+        // Đẩy tương phản để tạo "blob" dung nham rõ nét, nền tối sâu
         n = smooth01(constrain((n - 0.30f) * 1.9f, 0.0f, 1.0f));
-        setPixelXY(x, y, strip.gamma32(palette3(n, c0, c1, c2)));
+        uint32_t pixelCol = palette3(n, c0, curC1, curC2);
+
+        // Đốm lấp lánh (sparkle overlay) tinh tế trên các đỉnh dung nham nóng sáng rực
+        if (n > 0.72f && (random(100) < 18)) {
+          float sparkleBri = ((float)random(30, 80) / 100.0f) * (n - 0.72f) * 3.5f;
+          pixelCol = lerpColor(pixelCol, strip.Color(255, 250, 230), constrain(sparkleBri, 0.0f, 0.75f));
+        }
+
+        setPixelXY(x, y, strip.gamma32(pixelCol));
       }
     }
     strip.show();
-    t += 0.018f;               // chậm = sang; nhanh = rối
+    t += 0.018f;               // Chậm = sang; nhanh = rối
     if (delayWithTouch(25)) return;
   }
 }
@@ -179,26 +210,32 @@ void effectLavaNoise(uint32_t durationMs) {
 // ============================================================================
 void effectTiltGlow(uint32_t durationMs) {
   unsigned long start = millis();
-  float fx = 0.0f, fy = 0.0f;      // gia tốc đã lọc (đơn vị g)
-  float flash = 0.0f;              // độ sáng bùng khi lắc
+  float fx = 0.0f, fy = 0.0f;      // Gia tốc đã lọc (đơn vị g)
+  float flash = 0.0f;              // Độ sáng bùng khi lắc
   float prevMag = 1.0f;
   float t = 0.0f;
 
+  // Bộ đệm lưu vệt sáng dư quang (trailing afterglow buffer)
+  float trail[MATRIX_WIDTH][MATRIX_HEIGHT] = { {0.0f} };
+
   const uint32_t cA = strip.Color(0, 200, 255);
   const uint32_t cB = strip.Color(160, 60, 255);
+  const uint32_t cWhiteBurst = strip.Color(255, 255, 255);
 
   while (millis() - start < durationMs) {
     int16_t ax, ay, az;
     if (readMpuAccel(ax, ay, az)) {
       float gx = ax / 16384.0f, gy = ay / 16384.0f, gz = az / 16384.0f;
-      fx += (gx - fx) * 0.12f;     // low-pass: lọc mượt chống rung giật
+      fx += (gx - fx) * 0.12f;     // Low-pass: lọc mượt chống rung giật
       fy += (gy - fy) * 0.12f;
 
       float mag = sqrtf(gx * gx + gy * gy + gz * gz);
-      if (fabsf(mag - prevMag) > 0.25f) flash = 1.0f;   // phát hiện lắc
+      if (fabsf(mag - prevMag) > 0.22f) {
+        flash = 1.8f;   // Lắc mạnh -> Kích hoạt chớp trắng bùng nổ dramatic burst
+      }
       prevMag = mag;
     }
-    flash *= 0.90f;
+    flash *= 0.86f;
 
     float angle = atan2f(fy, fx);
     float tilt = constrain(sqrtf(fx * fx + fy * fy), 0.0f, 1.0f);
@@ -207,12 +244,24 @@ void effectTiltGlow(uint32_t durationMs) {
       for (int x = 0; x < MATRIX_WIDTH; x++) {
         float a = (x * 2.0f * PI) / MATRIX_WIDTH;
         float facing = 0.5f + 0.5f * cosf(a - angle);            // 1 = hướng đang nghiêng tới
-        float glow = powf(facing, 2.0f) * (0.25f + 0.75f * tilt); // powf 2.0f tối ưu cho 32 cột
-        glow += flash * 0.6f;
-        glow += 0.05f + 0.04f * sinf(t + x * 0.3f);                // nền "thở" rất nhẹ
+        float targetGlow = powf(facing, 2.0f) * (0.25f + 0.75f * tilt); // Powf 2.0f tối ưu cho 32 cột
+
+        // Cập nhật vệt dư quang mượt mà (trailing afterglow effect)
+        trail[x][y] = trail[x][y] * 0.78f + targetGlow * 0.26f;
+        float glow = fmaxf(targetGlow, trail[x][y]);
+
+        glow += 0.05f + 0.04f * sinf(t + x * 0.3f);                // Nền "thở" rất nhẹ
 
         float mix = 0.5f + 0.5f * sinf(a * 0.5f - angle + y * 0.25f);
-        setPixelXY(x, y, strip.gamma32(scaleColor(lerpColor(cA, cB, mix), constrain(glow, 0.0f, 1.0f))));
+        uint32_t col = scaleColor(lerpColor(cA, cB, mix), constrain(glow, 0.0f, 1.0f));
+
+        // Hiệu ứng chớp trắng rực rỡ khi lắc (dramatic white burst on shake)
+        if (flash > 0.02f) {
+          float burstBri = constrain(flash * 0.90f, 0.0f, 1.0f);
+          col = lerpColor(col, cWhiteBurst, burstBri);
+        }
+
+        setPixelXY(x, y, strip.gamma32(col));
       }
     }
     strip.show();
@@ -222,22 +271,44 @@ void effectTiltGlow(uint32_t durationMs) {
 }
 
 // ============================================================================
-// 5. DẢI CỰC QUANG UỐN LƯỢN (AURORA FLOW - TÍM & CYAN)
+// 5. DẢI CỰC QUANG UỐN LƯỢN (AURORA FLOW - TÍM, CYAN, XANH LỤC & HỒNG)
 // ============================================================================
+static inline uint32_t auroraMultiPalette(float v) {
+  v = fmodf(v, 1.0f);
+  if (v < 0.0f) v += 1.0f;
+  if (v < 0.30f) {
+    return lerpColor(strip.Color(110, 25, 245), strip.Color(0, 220, 210), v / 0.30f); // Tím sâu -> Cyan ngọc
+  } else if (v < 0.65f) {
+    return lerpColor(strip.Color(0, 220, 210), strip.Color(25, 255, 115), (v - 0.30f) / 0.35f); // Cyan -> Xanh lục cực quang
+  } else {
+    return lerpColor(strip.Color(25, 255, 115), strip.Color(255, 70, 160), (v - 0.65f) / 0.35f); // Xanh lục -> Hồng cực quang
+  }
+}
+
 void effectAurora(uint32_t durationMs) {
   unsigned long start = millis();
   float t = 0.0f;
-  const uint32_t cA = strip.Color(120, 40, 255);   // Tím sâu
-  const uint32_t cB = strip.Color(0, 220, 200);    // Cyan ngọc bích
 
   while (millis() - start < durationMs) {
     for (int y = 0; y < MATRIX_HEIGHT; y++) {
       for (int x = 0; x < MATRIX_WIDTH; x++) {
         float a = (x * 2.0f * PI) / MATRIX_WIDTH;
-        float mix = 0.5f + 0.5f * sin(a * 2.0f + t + y * 0.35f);
-        float bri = 0.25f + 0.75f * (0.5f + 0.5f * sin(a * 3.0f - t * 1.3f + y * 0.6f));
-        bri = bri * bri;  // Tăng tương phản, tạo nhiều khoảng đen sang trọng
-        setPixelXY(x, y, strip.gamma32(scaleColor(lerpColor(cA, cB, mix), bri)));
+
+        // Độ rộng dải lụa cực quang co giãn hữu cơ (varying width modulation)
+        float widthMod = 0.75f + 0.30f * sinf(a * 2.0f - t * 0.7f);
+
+        // Sóng uốn lượn đa hài tạo các nếp gấp rèm cực quang (organic undulation)
+        float curtain1 = sinf(a * 2.0f + t * 0.95f + sinf(y * 0.55f + t * 0.45f) * 1.6f);
+        float curtain2 = sinf(a * 3.0f - t * 1.35f + y * 0.40f);
+        float mix = 0.5f + 0.5f * (curtain1 * 0.65f + curtain2 * 0.35f);
+        mix = mix * widthMod;
+
+        // Độ sáng tương phản sắc nét mô phỏng ánh sáng dải lụa đêm bắc cực
+        float bri = 0.5f + 0.5f * sinf(a * 2.0f - t * 1.1f + y * 0.7f + curtain1 * 0.85f);
+        bri = 0.15f + 0.85f * powf(constrain(bri, 0.0f, 1.0f), 2.2f);
+
+        uint32_t col = auroraMultiPalette(mix + t * 0.045f);
+        setPixelXY(x, y, strip.gamma32(scaleColor(col, bri)));
       }
     }
     strip.show();
@@ -253,17 +324,35 @@ void effectBreathingGradient(uint32_t durationMs) {
   unsigned long start = millis();
   const uint32_t cA = strip.Color(255, 90, 60);    // Cam san hô
   const uint32_t cB = strip.Color(200, 40, 150);   // Hồng tím pastel
+  const float CYCLE_SEC = 5.2f;                    // Chu kỳ thở tự nhiên ~5.2s
 
   while (millis() - start < durationMs) {
     float phase = (millis() - start) / 1000.0f;
-    float breath = 0.5f + 0.5f * sin(phase * 1.2f); // Chu kỳ thở ~5s
-    breath = 0.15f + 0.85f * breath * breath;
+    float normCycle = fmodf(phase, CYCLE_SEC) / CYCLE_SEC; // 0.0 -> 1.0
+
+    // Nhịp thở tự nhiên bất đối xứng: Hít vào nhanh hơn (~36%), Thở ra chậm rãi (~64%)
+    float breath;
+    if (normCycle < 0.36f) {
+      // Hít vào (Inhale): dâng lên êm ái
+      breath = smooth01(normCycle / 0.36f);
+    } else {
+      // Thở ra (Exhale): hạ dần thư thái
+      breath = 1.0f - smooth01((normCycle - 0.36f) / 0.64f);
+    }
+    breath = 0.14f + 0.86f * powf(breath, 1.35f);
 
     for (int y = 0; y < MATRIX_HEIGHT; y++) {
       for (int x = 0; x < MATRIX_WIDTH; x++) {
         float a = (x * 2.0f * PI) / MATRIX_WIDTH;
-        float g = 0.5f + 0.5f * sin(a + phase * 0.4f);
-        setPixelXY(x, y, strip.gamma32(scaleColor(lerpColor(cA, cB, g), breath)));
+        float g = 0.5f + 0.5f * sinf(a + phase * 0.4f);
+
+        // Thêm hạt texture noise vi mô phá vỡ dải sọc gradient đồng đều
+        float nx = (float)x / 8.0f;
+        float texNoise = noise3(nx, y * 0.4f, phase * 0.25f, 4);
+        float texMod = 1.0f + (texNoise - 0.5f) * 0.12f; // Thay đổi +/- 6% tinh tế
+
+        float finalBri = constrain(breath * texMod, 0.0f, 1.0f);
+        setPixelXY(x, y, strip.gamma32(scaleColor(lerpColor(cA, cB, g), finalBri)));
       }
     }
     strip.show();
@@ -329,6 +418,7 @@ void effectWaterPhysics(uint32_t durationMs) {
 
     float tiltAngle = atan2((float)ay, (float)ax);
     float tiltMag = constrain(sqrt((float)ax * ax + (float)ay * ay) / 16384.0f, 0.0f, 1.2f);
+    unsigned long nowMs = millis();
 
     for (int x = 0; x < MATRIX_WIDTH; x++) {
       int left = (x - 1 + MATRIX_WIDTH) % MATRIX_WIDTH;
@@ -340,7 +430,11 @@ void effectWaterPhysics(uint32_t durationMs) {
       float colAngle = x * (2.0f * PI / MATRIX_WIDTH);
       float tiltForce = -sin(colAngle - tiltAngle) * tiltMag * 1.6f;
 
-      velocity[x] += waveTension + gravityRestore + tiltForce;
+      // Gợn sóng vi mô xung quanh kể cả khi đèn đứng yên (ambient ripple)
+      float ambientRipple = 0.012f * sinf(nowMs * 0.0035f + x * 0.65f)
+                          + 0.007f * cosf(nowMs * 0.0062f - x * 1.10f);
+
+      velocity[x] += waveTension + gravityRestore + tiltForce + ambientRipple;
 
       if (jerk > 0.25f) {
         float splashImpulse = min(jerk * 0.9f, 2.2f);
@@ -372,23 +466,31 @@ void effectWaterPhysics(uint32_t durationMs) {
 
     for (int x = 0; x < MATRIX_WIDTH; x++) {
       int waterTop = (int)round(surfaceY[x]);
+      int left = (x - 1 + MATRIX_WIDTH) % MATRIX_WIDTH;
+      int right = (x + 1) % MATRIX_WIDTH;
+      float slope = surfaceY[right] - surfaceY[left];
+      float specular = 0.5f + 0.5f * sinf(slope * 1.8f + nowMs * 0.004f);
 
       for (int y = MATRIX_HEIGHT - 1; y >= waterTop; y--) {
         uint32_t waterColor;
+        float depth = (float)(y - waterTop) / (float)(MATRIX_HEIGHT - waterTop + 0.01f);
 
         if (y == waterTop) {
-          if (abs(velocity[x]) > 0.15f || jerk > 0.3f) {
-            waterColor = strip.Color(230, 255, 255);
+          if (fabsf(velocity[x]) > 0.15f || jerk > 0.3f) {
+            waterColor = strip.Color(240, 255, 255); // Bọt sóng trắng xóa
           } else {
-            waterColor = strip.Color(100, 220, 255);
+            // Ánh phản chiếu lấp lánh trên mặt nước (reflective specular surface highlight)
+            waterColor = lerpColor(strip.Color(90, 225, 255), strip.Color(225, 250, 255), specular * 0.75f);
           }
         } else if (y == waterTop + 1) {
-          waterColor = strip.Color(0, 160, 255);
+          // Gần mặt nước: sắc xanh ngọc lam chuyển tiếp
+          waterColor = lerpColor(strip.Color(10, 185, 255), strip.Color(0, 140, 240), depth);
         } else {
-          waterColor = strip.Color(0, 45, 220);
+          // Tầng nước sâu: gradient xanh biển thẫm lắng đọng
+          waterColor = lerpColor(strip.Color(0, 115, 230), strip.Color(0, 30, 160), depth);
         }
 
-        setPixelXY(x, y, waterColor);
+        setPixelXY(x, y, strip.gamma32(waterColor));
       }
     }
 
@@ -401,7 +503,7 @@ void effectWaterPhysics(uint32_t durationMs) {
         int dy = (int)round(droplets[d].y);
 
         if (dy >= 0 && dy < MATRIX_HEIGHT && dy < (int)surfaceY[dx]) {
-          setPixelXY(dx, dy, strip.Color(240, 255, 255));
+          setPixelXY(dx, dy, strip.gamma32(strip.Color(240, 255, 255)));
         } else if (dy >= (int)surfaceY[dx]) {
           droplets[d].active = false;
         }
@@ -533,6 +635,58 @@ void effectStaticColor() {
 }
 
 // ============================================================================
+// MODE 11: HIỂN THỊ 4 Ô BITMAP TÙY BIẾN ĐỘC LẬP THEO 4 MẶT 1, 2, 3, 4 (CÓ ANIMATION)
+// ============================================================================
+void effectFourSlotsCustom(uint32_t durationMs) {
+  unsigned long start = millis();
+  while (millis() - start < durationMs) {
+    uint8_t frame = (millis() / 350) % 2;
+    renderFourSlotsAnimated(frame);
+    strip.show();
+    if (delayWithTouch(60)) return;
+  }
+}
+
+// ============================================================================
+// MODE 12: ĐỒNG HỒ ĐỂ BÀN 360° KỸ THUẬT SỐ & ĐỒNG BỘ GIỜ RTC
+// ============================================================================
+static uint32_t currentSecOfDay = 12 * 3600; // Mặc định 12:00:00
+static unsigned long lastSecTickMillis = 0;
+static bool timeIsSynced = false;
+
+void syncDeviceTime(uint8_t hour, uint8_t minute, uint8_t second) {
+  currentSecOfDay = ((uint32_t)hour % 24) * 3600 + ((uint32_t)minute % 60) * 60 + ((uint32_t)second % 60);
+  lastSecTickMillis = millis();
+  timeIsSynced = true;
+  dbgLog(TAG_FX, "Đồng bộ giờ hệ thống RTC: %02d:%02d:%02d", hour, minute, second);
+}
+
+void getDeviceTime(uint8_t &hour, uint8_t &minute, uint8_t &second) {
+  unsigned long now = millis();
+  unsigned long elapsedSec = (now - lastSecTickMillis) / 1000UL;
+  if (elapsedSec > 0) {
+    currentSecOfDay = (currentSecOfDay + elapsedSec) % 86400UL;
+    lastSecTickMillis += elapsedSec * 1000UL;
+  }
+  hour = (currentSecOfDay / 3600) % 24;
+  minute = (currentSecOfDay % 3600) / 60;
+  second = currentSecOfDay % 60;
+}
+
+void effectDeskClock(uint32_t durationMs) {
+  unsigned long start = millis();
+  while (millis() - start < durationMs) {
+    uint8_t h, m, s;
+    getDeviceTime(h, m, s);
+    bool colonBlink = (millis() % 1000) < 500;
+    renderDeskClock(h, m, colonBlink);
+    strip.show();
+    if (delayWithTouch(80)) return;
+  }
+}
+
+
+// ============================================================================
 // HIỆU ỨNG THỜI TIẾT TƯƠNG TÁC TỪ APP (FRAME 0x04)
 // ============================================================================
 void triggerWeatherUpdate(int8_t temp, uint8_t weatherId) {
@@ -591,3 +745,275 @@ void triggerWeatherUpdate(int8_t temp, uint8_t weatherId) {
   markSettingsChanged();
 }
 
+// ============================================================================
+// MODE 13: NHỊP ĐẬP TRÁI TIM LÃNG MẠN (HEARTBEAT PULSE - TÌNH YÊU NỒNG NÀN)
+// ============================================================================
+void effectHeartbeatPulse(uint32_t durationMs) {
+  unsigned long start = millis();
+
+  // Bitmap trái tim 8x8 chuẩn pixel art căn giữa trên mỗi mặt 8x8
+  static const uint8_t HEART_MAP[8] = {
+    0b00000000,
+    0b01100110,
+    0b11111111,
+    0b11111111,
+    0b11111111,
+    0b01111110,
+    0b00111100,
+    0b00011000
+  };
+
+  // Vùng tâm trái tim sáng điểm nhấn (inner highlight)
+  static const uint8_t HEART_CORE[8] = {
+    0b00000000,
+    0b00000000,
+    0b01000010,
+    0b01100110,
+    0b00111100,
+    0b00011000,
+    0b00000000,
+    0b00000000
+  };
+
+  // Hạt bụi sao / đốm sáng lãng mạn bay bổng lên trên như tàn lửa tình yêu
+  struct FloatingEmber {
+    float x;
+    float y;
+    float vy;
+    float phase;
+  };
+  const int NUM_EMBERS = 8;
+  FloatingEmber embers[NUM_EMBERS];
+  for (int i = 0; i < NUM_EMBERS; i++) {
+    embers[i].x = (float)random(0, MATRIX_WIDTH);
+    embers[i].y = (float)random(0, MATRIX_HEIGHT);
+    embers[i].vy = 0.04f + ((float)random(20, 60) / 1000.0f);
+    embers[i].phase = ((float)random(0, 628) / 100.0f);
+  }
+
+  const uint32_t cDeepRose   = strip.Color(180, 8, 45);    // Đỏ hoa hồng nhung
+  const uint32_t cWarmPink   = strip.Color(255, 65, 130);  // Hồng ấm rực rỡ
+  const uint32_t cSoftWhite  = strip.Color(255, 235, 245); // Ánh trắng ấm tại đỉnh nhịp đập
+  const uint32_t cGlowPink   = strip.Color(210, 25, 95);   // Ánh hào quang hồng lan tỏa
+  const uint32_t cBgBurgundy = strip.Color(20, 2, 8);      // Nền đỏ rượu vang sâu
+  const uint32_t cBgWarmRose = strip.Color(38, 4, 18);     // Nền hồng cánh sen trầm ấm
+
+  const uint32_t CYCLE_MS = 1150; // Chu kỳ nhịp đập ~52 bpm (êm đềm, tình cảm)
+
+  while (millis() - start < durationMs) {
+    uint32_t elapsed = millis() - start;
+    uint32_t tCycle = elapsed % CYCLE_MS;
+    float tSec = elapsed / 1000.0f;
+
+    // 1. Nhịp đập đôi tự nhiên sinh học (lub-dub)
+    float beatPulse = 0.0f;
+    if (tCycle >= 50 && tCycle <= 280) {
+      // Nhịp đập 1 (Lub) - Đột ngột bùng nở
+      float p = (float)(tCycle - 50) / 230.0f;
+      float s = sinf(p * PI);
+      beatPulse = s * s;
+    } else if (tCycle >= 340 && tCycle <= 560) {
+      // Nhịp đập 2 (Dub) - Âm vang dội lại
+      float p = (float)(tCycle - 340) / 220.0f;
+      float s = sinf(p * PI);
+      beatPulse = 0.80f * s * s;
+    }
+
+    // 2. Nền chuyển dịch chậm giữa các tông màu đỏ rượu ấm
+    float bgShift = 0.5f + 0.5f * sinf(tSec * 0.35f);
+    uint32_t bgCurrent = lerpColor(cBgBurgundy, cBgWarmRose, bgShift);
+
+    // 3. Cập nhật hạt đốm sáng lơ lửng bay lên
+    for (int i = 0; i < NUM_EMBERS; i++) {
+      embers[i].y -= embers[i].vy;
+      embers[i].x += 0.02f * sinf(tSec * 1.5f + embers[i].phase);
+      if (embers[i].y < -1.0f) {
+        embers[i].y = (float)MATRIX_HEIGHT;
+        embers[i].x = (float)random(0, MATRIX_WIDTH);
+      }
+    }
+
+    // 4. Vẽ từng pixel lên ma trận 32x8
+    for (int x = 0; x < MATRIX_WIDTH; x++) {
+      int face = x / 8;        // 0, 1, 2, 3
+      int lx = x % 8;          // 0..7 trên mặt hiện tại
+      float faceCenterX = face * 8.0f + 3.5f;
+      float faceCenterY = 3.5f;
+
+      // Khoảng cách hình học tới tâm mặt (để tạo vầng hào quang tỏa tròn)
+      float dx = (float)x - faceCenterX;
+
+      for (int y = 0; y < MATRIX_HEIGHT; y++) {
+        float dy = (float)y - faceCenterY;
+        float dist = sqrtf(dx * dx + dy * dy);
+
+        // Vầng hào quang hồng mềm mại tỏa lan giữa các nhịp đập
+        float glowRadius = 2.4f + 2.2f * beatPulse + 0.35f * sinf(tSec * 2.2f);
+        float glowVal = expf(-dist / glowRadius) * (0.22f + 0.65f * beatPulse);
+        uint32_t pixelCol = lerpColor(bgCurrent, cGlowPink, constrain(glowVal, 0.0f, 1.0f));
+
+        // Kiểm tra hình vẽ trái tim 8x8
+        bool isHeartPixel = (HEART_MAP[y] >> (7 - lx)) & 0x01;
+        bool isCorePixel = (HEART_CORE[y] >> (7 - lx)) & 0x01;
+
+        if (isHeartPixel) {
+          // Màu thân trái tim: đỏ nhung -> hồng ấm theo nhịp đập
+          uint32_t heartColor = lerpColor(cDeepRose, cWarmPink, beatPulse);
+
+          if (isCorePixel && beatPulse > 0.45f) {
+            // Điểm nhấn bừng sáng trắng ngọc ở đỉnh nhịp đập
+            float coreBright = (beatPulse - 0.45f) / 0.55f;
+            heartColor = lerpColor(heartColor, cSoftWhite, coreBright * 0.85f);
+          }
+
+          // Trái tim đập sáng bừng rực rỡ
+          float heartBri = 0.70f + 0.30f * beatPulse;
+          pixelCol = scaleColor(heartColor, heartBri);
+        }
+
+        // 5. Hòa trộn hạt sparkle/ember lãng mạn bay bổng
+        for (int i = 0; i < NUM_EMBERS; i++) {
+          float ex = embers[i].x;
+          float ey = embers[i].y;
+          float edx = fabsf((float)x - ex);
+          if (edx > MATRIX_WIDTH * 0.5f) edx = MATRIX_WIDTH - edx;
+          float edy = fabsf((float)y - ey);
+          if (edx < 1.0f && edy < 1.0f) {
+            float sparkBri = (1.0f - edx) * (1.0f - edy) * (0.4f + 0.6f * sinf(tSec * 4.0f + embers[i].phase));
+            pixelCol = lerpColor(pixelCol, strip.Color(255, 215, 230), constrain(sparkBri, 0.0f, 0.85f));
+          }
+        }
+
+        setPixelXY(x, y, strip.gamma32(pixelCol));
+      }
+    }
+
+    strip.show();
+    if (delayWithTouch(28)) return;
+  }
+}
+
+// ============================================================================
+// MODE 14: SÓNG TÌNH YÊU LAN TỎA (LOVE RIPPLE - GỢN SÓNG LÃNG MẠN MƠ MỘNG)
+// ============================================================================
+static inline uint32_t loveRipplePalette(float v) {
+  v = fmodf(v, 1.0f);
+  if (v < 0.0f) v += 1.0f;
+  if (v < 0.25f) {
+    return lerpColor(strip.Color(255, 75, 145), strip.Color(225, 25, 165), v * 4.0f); // Rose pink -> Magenta
+  } else if (v < 0.50f) {
+    return lerpColor(strip.Color(225, 25, 165), strip.Color(170, 90, 245), (v - 0.25f) * 4.0f); // Magenta -> Lavender
+  } else if (v < 0.75f) {
+    return lerpColor(strip.Color(170, 90, 245), strip.Color(120, 55, 225), (v - 0.50f) * 4.0f); // Lavender -> Soft violet
+  } else {
+    return lerpColor(strip.Color(120, 55, 225), strip.Color(255, 75, 145), (v - 0.75f) * 4.0f); // Soft violet -> Rose pink
+  }
+}
+
+void effectLoveRipple(uint32_t durationMs) {
+  unsigned long start = millis();
+  const int NUM_SOURCES = 4;
+
+  while (millis() - start < durationMs) {
+    float t = (millis() - start) / 1000.0f;
+
+    // Nhịp thở độ sáng tổng thể dịu êm
+    float breath = 0.65f + 0.35f * (0.5f + 0.5f * sinf(t * 0.9f));
+
+    // 4 tâm sóng tình yêu trôi dạt hữu cơ quanh 4 mặt của hình trụ
+    float srcX[NUM_SOURCES];
+    float srcY[NUM_SOURCES];
+    for (int i = 0; i < NUM_SOURCES; i++) {
+      float baseCenter = i * 8.0f + 3.5f;
+      // Trôi dạt chậm theo quỹ đạo Lissajous mềm mại
+      srcX[i] = baseCenter + 1.8f * sinf(t * 0.55f + i * 1.57f);
+      srcY[i] = 3.5f + 1.6f * cosf(t * 0.70f + i * 2.09f);
+    }
+
+    for (int x = 0; x < MATRIX_WIDTH; x++) {
+      for (int y = 0; y < MATRIX_HEIGHT; y++) {
+        float waveSum = 0.0f;
+        float attenSum = 0.0f;
+
+        // Tính giao thoa sóng từ các tâm nguồn (liền mạch 360 độ quanh trụ)
+        for (int i = 0; i < NUM_SOURCES; i++) {
+          float dx = fabsf((float)x - srcX[i]);
+          if (dx > MATRIX_WIDTH * 0.5f) dx = MATRIX_WIDTH - dx; // Quấn vòng trụ
+          float dy = (float)y - srcY[i];
+          float dist = sqrtf(dx * dx + dy * dy);
+
+          // Vòng sóng đồng tâm lan tỏa ra ngoài
+          float w = sinf(dist * 1.6f - t * 2.8f);
+          float atten = 1.0f / (1.0f + dist * 0.32f);
+
+          waveSum += w * atten;
+          attenSum += atten;
+        }
+
+        float interference = waveSum / (attenSum + 0.001f); // Chuẩn hóa -1.0 .. 1.0
+        float normVal = 0.5f + 0.5f * interference;
+
+        // Chu kỳ màu sắc luân chuyển chậm
+        float colorPhase = normVal * 0.45f + t * 0.05f;
+        uint32_t baseCol = loveRipplePalette(colorPhase);
+
+        // Độ sáng với độ tương phản gợn sóng đẹp mắt
+        float bri = 0.20f + 0.80f * powf(normVal, 1.4f);
+        uint32_t col = scaleColor(baseCol, bri * breath);
+
+        // Lớp shimmer / hạt sao pastel lấp lánh như bụi tiên
+        float shimmerNoise = sinf(x * 12.9898f + y * 78.233f + t * 4.5f);
+        if (shimmerNoise > 0.82f) {
+          float shimmerIntensity = (shimmerNoise - 0.82f) / 0.18f;
+          col = lerpColor(col, strip.Color(255, 235, 250), shimmerIntensity * 0.70f);
+        }
+
+        setPixelXY(x, y, strip.gamma32(col));
+      }
+    }
+
+    strip.show();
+    if (delayWithTouch(26)) return;
+  }
+}
+
+// ============================================================================
+// HIỆU ỨNG TRẠNG THÁI NGUỒN SẠC IP2312
+// ============================================================================
+void effectChargingAmber(uint32_t durationMs) {
+  unsigned long start = millis();
+  const uint32_t cAmber = strip.Color(255, 130, 15);
+  int step = 0;
+
+  while ((durationMs == 0) ? true : (millis() - start < durationMs)) {
+    if (userOverrideCharging || updateChargeState() != CHARGING) break;
+
+    strip.clear();
+    float breath = 0.35f + 0.65f * (0.5f + 0.5f * sinf(step * 0.12f));
+    int maxRow = 1 + ((step / 4) % MATRIX_HEIGHT);
+
+    for (int x = 0; x < MATRIX_WIDTH; x++) {
+      for (int y = 0; y < maxRow; y++) {
+        setPixelXY(x, y, strip.gamma32(scaleColor(cAmber, breath)));
+      }
+    }
+    strip.show();
+    step++;
+    if (delayWithTouch(40)) break;
+  }
+}
+
+void effectChargeFullGreen(uint32_t durationMs) {
+  unsigned long start = millis();
+  const uint32_t cGreen = strip.Color(20, 200, 40);
+
+  while ((durationMs == 0) ? true : (millis() - start < durationMs)) {
+    if (userOverrideCharging || updateChargeState() != FULL) break;
+
+    for (int i = 0; i < NUM_LEDS; i++) {
+      strip.setPixelColor(i, cGreen);
+    }
+    strip.show();
+    if (delayWithTouch(60)) break;
+  }
+}

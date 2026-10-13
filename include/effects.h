@@ -32,6 +32,22 @@ void effectAurora(uint32_t durationMs);
 // Mode 10: Chế độ màu tĩnh tùy chọn theo App (Static Color)
 void effectStaticColor();
 
+// Mode 11: Hiển thị 4 ô Bitmap tùy biến độc lập theo 4 mặt (4-Slot Custom Display)
+void effectFourSlotsCustom(uint32_t durationMs = 60000);
+
+// Mode 12: Đồng hồ để bàn 360 độ kỹ thuật số & thời tiết (Desk Clock)
+void effectDeskClock(uint32_t durationMs = 60000);
+
+// Mode 13: Nhịp đập trái tim lãng mạn (Heartbeat Pulse)
+void effectHeartbeatPulse(uint32_t durationMs);
+
+// Mode 14: Sóng tình yêu lan tỏa (Love Ripple)
+void effectLoveRipple(uint32_t durationMs);
+
+// Đồng bộ và đọc thời gian hệ thống RTC (Frame 0x05)
+void syncDeviceTime(uint8_t hour, uint8_t minute, uint8_t second);
+void getDeviceTime(uint8_t &hour, uint8_t &minute, uint8_t &second);
+
 // ============================================================================
 // HIỆU ỨNG TRẠNG THÁI NGUỒN SẠC & TIỆN ÍCH HỆ THỐNG
 // ============================================================================

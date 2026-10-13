@@ -55,6 +55,8 @@ android {
             minifyEnabled false
             // ProGuard rule files applied to release builds
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Default to debug signing for convenient testing and sideloading
+            signingConfig signingConfigs.debug
         }
     }
 

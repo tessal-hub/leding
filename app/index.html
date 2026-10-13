@@ -2,24 +2,54 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>LED Matrix 360° Controller</title>
-  <meta name="theme-color" content="#0a0e17">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LED Matrix 360° • Desktop Digital Clone</title>
+  <meta name="theme-color" content="#0b0f17">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <style>
+    /* ========================================================================
+       1. MATERIAL DESIGN 3 (MATERIAL YOU) DESIGN TOKENS
+       ======================================================================== */
     :root {
-      --bg: #070a12;
-      --card-bg: #111827;
-      --card-border: rgba(255, 255, 255, 0.10);
-      --card-hover: #1e293b;
-      --primary: #00f2fe;
-      --primary-glow: rgba(0, 242, 254, 0.25);
-      --accent: #38bdf8;
-      --amber: #f59e0b;
-      --green: #10b981;
-      --green-glow: rgba(16, 185, 129, 0.25);
-      --text: #f8fafc;
-      --text-muted: #cbd5e1; /* Đã nâng độ tương phản WCAG AA >= 6.5:1 */
-      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --md-sys-color-primary: #7ed4fc;
+      --md-sys-color-on-primary: #003548;
+      --md-sys-color-primary-container: #004d68;
+      --md-sys-color-on-primary-container: #c5e7ff;
+      --md-sys-color-primary-glow: rgba(126, 212, 252, 0.28);
+
+      --md-sys-color-secondary: #90d3aa;
+      --md-sys-color-on-secondary: #003820;
+      --md-sys-color-secondary-container: #1b4f34;
+      --md-sys-color-on-secondary-container: #acf0c5;
+
+      --md-sys-color-tertiary: #d0bcff;
+      --md-sys-color-on-tertiary: #381e72;
+      --md-sys-color-tertiary-container: #4f378a;
+      --md-sys-color-on-tertiary-container: #e9ddff;
+
+      --md-sys-color-error: #ffb4ab;
+      --md-sys-color-error-container: #93000a;
+      --md-sys-color-on-error: #690005;
+
+      --md-sys-color-surface: #0b0f17;
+      --md-sys-color-on-surface: #e1e3eb;
+      --md-sys-color-surface-container-lowest: #06090e;
+      --md-sys-color-surface-container-low: #111620;
+      --md-sys-color-surface-container: #171d27;
+      --md-sys-color-surface-container-high: #212836;
+      --md-sys-color-surface-container-highest: #2b3343;
+
+      --md-sys-color-on-surface-variant: #c0c7d3;
+      --md-sys-color-outline: #89929f;
+      --md-sys-color-outline-variant: rgba(255, 255, 255, 0.1);
+
+      --green-jade: #22c55e;
+      --amber-warm: #f59e0b;
+
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', Consolas, monospace;
     }
 
     * {
@@ -30,800 +60,1887 @@
       user-select: none;
     }
 
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-      }
-    }
-
     body {
-      font-family: var(--font);
-      background: var(--bg);
-      color: var(--text);
+      font-family: var(--font-sans);
+      background: var(--md-sys-color-surface);
+      color: var(--md-sys-color-on-surface);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       overflow-x: hidden;
-      padding-bottom: calc(85px + env(safe-area-inset-bottom, 0px));
     }
 
-    /* HEADER */
-    header {
-      padding: 16px 20px;
+    /* DESKTOP APP SHELL: SIDEBAR + MAIN WORKSPACE */
+    .app-layout {
+      display: flex;
+      flex: 1;
+      min-height: 100vh;
+      position: relative;
+    }
+
+    /* SIDEBAR NAVIGATION RAIL (Desktop) */
+    aside.nav-rail {
+      width: 280px;
+      background: var(--md-sys-color-surface-container-low);
+      border-right: 1px solid var(--md-sys-color-outline-variant);
+      display: flex;
+      flex-direction: column;
+      padding: 24px 16px;
+      gap: 20px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      z-index: 50;
+      flex-shrink: 0;
+    }
+
+    .brand-block {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 4px 8px 16px 8px;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+    }
+
+    .brand-icon-box {
+      width: 46px;
+      height: 46px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, var(--md-sys-color-primary), var(--md-sys-color-primary-container));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--md-sys-color-on-primary);
+      box-shadow: 0 4px 16px var(--md-sys-color-primary-glow);
+    }
+
+    .brand-info h1 {
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      color: #fff;
+    }
+
+    .brand-info p {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--md-sys-color-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .nav-destinations {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 18px;
+      border-radius: 28px;
+      background: transparent;
+      color: var(--md-sys-color-on-surface-variant);
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+      text-align: left;
+      width: 100%;
+    }
+
+    .nav-item svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+      transition: transform 0.2s;
+    }
+
+    .nav-item:hover {
+      background: var(--md-sys-color-surface-container-high);
+      color: #fff;
+    }
+
+    .nav-item.active {
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+      font-weight: 700;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .nav-item.active svg {
+      transform: scale(1.1);
+      fill: var(--md-sys-color-primary);
+    }
+
+    /* BLE STATUS CARD TRONG SIDEBAR */
+    .ble-status-card {
+      background: var(--md-sys-color-surface-container);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 20px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .ble-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .ble-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    .pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--md-sys-color-outline);
+      transition: background 0.3s;
+    }
+
+    .pulse-dot.connected {
+      background: var(--green-jade);
+      box-shadow: 0 0 10px var(--green-jade);
+    }
+
+    .btn-connect-action {
+      padding: 10px 16px;
+      border-radius: 20px;
+      border: 1px solid var(--md-sys-color-primary);
+      background: rgba(126, 212, 252, 0.12);
+      color: var(--md-sys-color-primary);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s;
+      width: 100%;
+    }
+
+    .btn-connect-action:hover {
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+      box-shadow: 0 4px 14px var(--md-sys-color-primary-glow);
+    }
+
+    .btn-connect-action.connected {
+      border-color: rgba(255, 180, 171, 0.4);
+      background: rgba(255, 180, 171, 0.1);
+      color: var(--md-sys-color-error);
+    }
+
+    .btn-connect-action.connected:hover {
+      background: var(--md-sys-color-error);
+      color: var(--md-sys-color-on-error);
+    }
+
+    /* MAIN VIEWPORT */
+    .app-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      max-width: 1280px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px 32px 100px 32px;
+      overflow-y: auto;
+    }
+
+    /* TOP BAR CHO MOBILE / DESKTOP SUB-HEADER */
+    .mobile-header {
+      display: none;
+      padding: 14px 20px;
+      background: var(--md-sys-color-surface-container-low);
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 40;
+    }
+
+    /* BOTTOM NAV CHO MOBILE (< 960px) */
+    nav.mobile-bottom-nav {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 72px;
+      background: rgba(17, 22, 32, 0.92);
+      backdrop-filter: blur(20px);
+      border-top: 1px solid var(--md-sys-color-outline-variant);
+      z-index: 99;
+      justify-content: space-around;
+      align-items: center;
+      padding: 0 6px;
+    }
+
+    .mobile-nav-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      background: none;
+      border: none;
+      color: var(--md-sys-color-on-surface-variant);
+      font-size: 0.72rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 68px;
+      padding: 6px 0;
+      border-radius: 16px;
+      transition: all 0.2s;
+    }
+
+    .mobile-nav-btn svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+    }
+
+    .mobile-nav-btn.active {
+      color: var(--md-sys-color-primary);
+      font-weight: 700;
+      background: rgba(126, 212, 252, 0.12);
+    }
+
+    /* CARDS & CONTAINERS */
+    .screen-panel {
+      display: none;
+      animation: fadeIn 0.25s cubic-bezier(0.2, 0, 0, 1);
+    }
+
+    .screen-panel.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .m3-card {
+      background: var(--md-sys-color-surface-container);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 24px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.22);
+      transition: border-color 0.2s;
+    }
+
+    .m3-card:hover {
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+
+    .card-header-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: #090e1a;
-      border-bottom: 1px solid var(--card-border);
-      position: sticky;
-      top: 0;
-      z-index: 100;
+      margin-bottom: 20px;
     }
 
-    .brand {
+    .card-header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .card-header-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-header-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .card-header-desc {
+      font-size: 0.8rem;
+      color: var(--md-sys-color-on-surface-variant);
+      margin-top: 2px;
+    }
+
+    /* TELEMETRY CHIPS ROW */
+    .telemetry-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .telemetry-pill {
+      background: var(--md-sys-color-surface-container-low);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 18px;
+      padding: 14px 16px;
       display: flex;
       align-items: center;
       gap: 12px;
     }
 
-    .brand-icon {
-      width: 44px;
-      height: 44px;
+    .telemetry-icon-box {
+      width: 38px;
+      height: 38px;
       border-radius: 12px;
-      background: linear-gradient(135deg, #00f2fe, #38bdf8);
+      background: var(--md-sys-color-surface-container-high);
       display: flex;
       align-items: center;
       justify-content: center;
+      color: var(--md-sys-color-primary);
     }
 
-    .brand-icon svg {
-      width: 24px;
-      height: 24px;
-      fill: #06101e;
-    }
-
-    .brand-text h1 {
-      font-size: 1.15rem;
-      font-weight: 700;
-      letter-spacing: -0.3px;
-    }
-
-    .brand-text p {
-      font-size: 0.78rem;
-      color: var(--text-muted);
-      font-weight: 500;
-    }
-
-    .btn-connect {
-      min-width: 48px;
-      min-height: 48px;
-      padding: 10px 18px;
-      border-radius: 24px;
-      border: 1px solid var(--primary);
-      background: rgba(0, 242, 254, 0.12);
-      color: var(--primary);
-      font-size: 0.85rem;
+    .telemetry-data h4 {
+      font-size: 0.72rem;
       font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      transition: background 0.2s, border-color 0.2s;
-    }
-
-    .btn-connect:focus-visible {
-      outline: 2px solid var(--primary);
-      outline-offset: 2px;
-    }
-
-    .btn-connect.connected {
-      border-color: var(--green);
-      background: rgba(16, 185, 129, 0.15);
-      color: var(--green);
-    }
-
-    .pulse-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: currentColor;
-    }
-
-    /* MAIN CONTAINER */
-    main {
-      flex: 1;
-      padding: 16px;
-      max-width: 540px;
-      margin: 0 auto;
-      width: 100%;
-    }
-
-    /* TELEMETRY BAR */
-    .status-bar {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-      margin-bottom: 18px;
-    }
-
-    .stat-pill {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 14px;
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .stat-label {
-      font-size: 0.75rem;
-      color: var(--text-muted);
+      color: var(--md-sys-color-on-surface-variant);
       text-transform: uppercase;
-      font-weight: 600;
       letter-spacing: 0.5px;
     }
 
-    .stat-val {
-      font-size: 0.88rem;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    /* CARD CONTAINER */
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 20px;
-      padding: 20px;
-      margin-bottom: 16px;
-      backdrop-filter: blur(16px);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
-    }
-
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
-    }
-
-    .card-title {
+    .telemetry-data p {
       font-size: 0.95rem;
       font-weight: 700;
+      color: #fff;
+      margin-top: 2px;
+    }
+
+    /* SLIDERS & CONTROLS */
+    .slider-container {
       display: flex;
-      align-items: center;
+      flex-direction: column;
       gap: 8px;
+      margin-top: 14px;
     }
 
-    /* QUICK POWER & BRIGHTNESS */
-    .power-btn {
-      width: 42px;
-      height: 42px;
-      border-radius: 50%;
-      border: 1px solid var(--card-border);
-      background: rgba(255, 255, 255, 0.05);
-      color: var(--text-muted);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: all 0.25s ease;
-    }
-
-    .power-btn.on {
-      border-color: var(--primary);
-      background: rgba(0, 242, 254, 0.15);
-      color: var(--primary);
-      box-shadow: 0 0 16px var(--primary-glow);
-    }
-
-    .slider-group {
-      margin-top: 6px;
-    }
-
-    .slider-header {
+    .slider-label-row {
       display: flex;
       justify-content: space-between;
-      font-size: 0.82rem;
-      color: var(--text-muted);
-      margin-bottom: 10px;
+      align-items: center;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--md-sys-color-on-surface-variant);
     }
 
-    .slider-val {
-      font-weight: 700;
-      color: var(--primary);
+    .slider-track-wrap {
+      display: flex;
+      align-items: center;
+      gap: 14px;
     }
 
-    input[type=range] {
+    input[type=range].m3-slider {
       -webkit-appearance: none;
       width: 100%;
       height: 8px;
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      background: var(--md-sys-color-surface-container-highest);
       outline: none;
       transition: background 0.2s;
     }
 
-    input[type=range]::-webkit-slider-thumb {
+    input[type=range].m3-slider::-webkit-slider-thumb {
       -webkit-appearance: none;
       width: 22px;
       height: 22px;
       border-radius: 50%;
-      background: #ffffff;
-      box-shadow: 0 0 10px var(--primary);
+      background: #fff;
+      border: 2px solid var(--md-sys-color-primary);
+      box-shadow: 0 0 12px var(--md-sys-color-primary-glow);
       cursor: pointer;
-      border: 2px solid var(--primary);
       transition: transform 0.15s;
     }
 
-    input[type=range]:active::-webkit-slider-thumb {
-      transform: scale(1.18);
+    input[type=range].m3-slider:active::-webkit-slider-thumb {
+      transform: scale(1.2);
     }
 
-    /* TAB CONTENT PANELS */
-    .tab-pane {
-      display: none;
+    /* QUICK CHIPS ROW */
+    .chip-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+      flex-wrap: wrap;
     }
 
-    .tab-pane.active {
-      display: block;
-      animation: fadeIn 0.2s ease-out;
+    .filter-chip {
+      padding: 8px 16px;
+      border-radius: 12px;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      background: var(--md-sys-color-surface-container-high);
+      color: var(--md-sys-color-on-surface-variant);
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
     }
 
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(6px); }
-      to { opacity: 1; transform: translateY(0); }
+    .filter-chip:hover {
+      background: var(--md-sys-color-surface-container-highest);
+      color: #fff;
     }
 
-    /* MODES GRID */
+    .filter-chip.active {
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+      border-color: var(--md-sys-color-primary);
+      font-weight: 700;
+    }
+
+    /* M3 POWER TOGGLE BUTTON */
+    .power-toggle-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      background: var(--md-sys-color-surface-container-highest);
+      color: var(--md-sys-color-on-surface-variant);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.25s;
+    }
+
+    .power-toggle-btn.on {
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+      box-shadow: 0 0 20px var(--md-sys-color-primary-glow);
+      border-color: var(--md-sys-color-primary);
+    }
+
+    /* MODES GRID (13 CHẾ ĐỘ CHUẨN ANDROID) */
     .modes-grid {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 14px;
     }
 
     .mode-card {
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid var(--card-border);
-      border-radius: 16px;
-      padding: 14px;
+      background: var(--md-sys-color-surface-container-low);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 20px;
+      padding: 16px;
       cursor: pointer;
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      transition: all 0.25s ease;
+      gap: 10px;
+      transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
       position: relative;
-      overflow: hidden;
     }
 
     .mode-card:hover {
-      background: var(--card-hover);
+      background: var(--md-sys-color-surface-container-high);
+      transform: translateY(-2px);
       border-color: rgba(255, 255, 255, 0.18);
     }
 
     .mode-card.active {
-      border-color: var(--primary);
-      background: rgba(0, 242, 254, 0.12);
-      box-shadow: 0 0 20px rgba(0, 242, 254, 0.2);
+      background: var(--md-sys-color-primary-container);
+      border-color: var(--md-sys-color-primary);
+      box-shadow: 0 4px 20px var(--md-sys-color-primary-glow);
     }
 
-    .mode-card.active::after {
-      content: "";
-      position: absolute;
-      top: 0;
-      right: 0;
-      width: 32px;
-      height: 32px;
-      background: linear-gradient(135deg, transparent 50%, var(--primary) 50%);
-      border-radius: 0 15px 0 0;
+    .mode-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
 
-    .mode-icon {
-      font-size: 1.5rem;
+    .mode-icon-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--md-sys-color-surface-container-highest);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      transition: background 0.2s;
     }
 
-    .mode-name {
-      font-size: 0.85rem;
+    .mode-card.active .mode-icon-circle {
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+    }
+
+    .mode-check-badge {
+      display: none;
+      color: var(--md-sys-color-primary);
+    }
+
+    .mode-card.active .mode-check-badge {
+      display: block;
+    }
+
+    .mode-info h3 {
+      font-size: 0.95rem;
       font-weight: 700;
-      line-height: 1.25;
+      color: #fff;
     }
 
-    .mode-desc {
-      font-size: 0.68rem;
-      color: var(--text-muted);
+    .mode-card.active .mode-info h3 {
+      color: var(--md-sys-color-on-primary-container);
+    }
+
+    .mode-info p {
+      font-size: 0.76rem;
+      color: var(--md-sys-color-on-surface-variant);
+      margin-top: 2px;
       line-height: 1.35;
     }
 
-    /* COLOR WHEEL */
-    .color-section {
+    .mode-card.active .mode-info p {
+      color: var(--md-sys-color-on-primary-container);
+      opacity: 0.9;
+    }
+
+    /* SECONDARY TABS ROW (Creative & Canvas) */
+    .secondary-tabs {
+      display: flex;
+      gap: 10px;
+      background: var(--md-sys-color-surface-container-low);
+      padding: 6px;
+      border-radius: 16px;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      margin-bottom: 20px;
+    }
+
+    .sub-tab-btn {
+      flex: 1;
+      padding: 10px 16px;
+      border-radius: 12px;
+      background: transparent;
+      border: none;
+      color: var(--md-sys-color-on-surface-variant);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .sub-tab-btn.active {
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+      font-weight: 700;
+    }
+
+    /* COLOR PALETTE SECTION */
+    .color-preview-hero {
+      height: 130px;
+      border-radius: 24px;
+      padding: 20px;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 18px;
-    }
-
-    #colorCanvas {
-      width: 240px;
-      height: 240px;
-      border-radius: 50%;
-      cursor: crosshair;
-      box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
-      border: 2px solid var(--card-border);
-    }
-
-    .color-preview-bar {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      width: 100%;
-    }
-
-    .color-swatch {
-      width: 44px;
-      height: 44px;
-      border-radius: 12px;
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    }
-
-    .color-info {
-      flex: 1;
-    }
-
-    .color-hex {
-      font-size: 1rem;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-    }
-
-    .color-rgb {
-      font-size: 0.72rem;
-      color: var(--text-muted);
-    }
-
-    .palette-grid {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 10px;
-      width: 100%;
-    }
-
-    .palette-dot {
-      height: 42px;
-      border-radius: 12px;
+      justify-content: flex-end;
       cursor: pointer;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      margin-bottom: 18px;
+      transition: transform 0.2s, box-shadow 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .color-preview-hero:hover {
+      transform: scale(1.01);
+    }
+
+    .color-badge-box {
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(8px);
+      padding: 8px 16px;
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      align-self: flex-start;
+      color: #fff;
+    }
+
+    .color-badge-box span.code {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+
+    .hue-gradient-bar {
+      height: 20px;
+      border-radius: 10px;
+      background: linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+      margin-bottom: 6px;
+    }
+
+    .swatches-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .swatch-card {
+      height: 60px;
+      border-radius: 16px;
+      padding: 10px 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: flex-end;
+      font-weight: 700;
+      font-size: 0.8rem;
       border: 1px solid rgba(255, 255, 255, 0.15);
       transition: transform 0.15s, box-shadow 0.15s;
     }
 
-    .palette-dot:active {
-      transform: scale(0.92);
+    .swatch-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
     }
 
-    /* TEXT MARQUEE FORM */
-    .text-input-group {
+    /* MARQUEE TEXT FORM */
+    .input-row {
       display: flex;
-      flex-direction: column;
       gap: 12px;
+      margin-top: 14px;
     }
 
-    .input-box {
-      width: 100%;
-      padding: 14px 16px;
-      border-radius: 14px;
-      border: 1px solid var(--card-border);
-      background: rgba(255, 255, 255, 0.04);
+    .m3-text-input {
+      flex: 1;
+      padding: 14px 18px;
+      border-radius: 16px;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      background: var(--md-sys-color-surface-container-high);
       color: #fff;
       font-size: 0.95rem;
       outline: none;
       transition: border 0.2s;
     }
 
-    .input-box:focus {
-      border-color: var(--primary);
-      background: rgba(0, 242, 254, 0.05);
+    .m3-text-input:focus {
+      border-color: var(--md-sys-color-primary);
+      box-shadow: 0 0 10px var(--md-sys-color-primary-glow);
     }
 
-    .btn-send {
-      padding: 14px;
-      border-radius: 14px;
+    .m3-btn-primary {
+      padding: 14px 24px;
+      border-radius: 16px;
       border: none;
-      background: linear-gradient(135deg, #00f2fe, #4facfe);
-      color: #051329;
-      font-size: 0.95rem;
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+      font-size: 0.9rem;
       font-weight: 700;
       cursor: pointer;
-      display: flex;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      box-shadow: 0 4px 18px var(--primary-glow);
-      transition: transform 0.15s;
+      transition: all 0.2s;
+      white-space: nowrap;
     }
 
-    .btn-send:active {
-      transform: scale(0.98);
+    .m3-btn-primary:hover {
+      box-shadow: 0 4px 18px var(--md-sys-color-primary-glow);
+      filter: brightness(1.08);
     }
 
-    .quick-text-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 8px;
-    }
-
-    .text-chip {
-      padding: 8px 12px;
-      border-radius: 20px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--card-border);
-      font-size: 0.75rem;
-      color: var(--text-muted);
+    .m3-btn-tonal {
+      padding: 12px 20px;
+      border-radius: 14px;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      background: var(--md-sys-color-surface-container-high);
+      color: var(--md-sys-color-on-surface);
+      font-size: 0.85rem;
+      font-weight: 600;
       cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
       transition: all 0.2s;
     }
 
-    .text-chip:hover {
-      background: rgba(0, 242, 254, 0.15);
-      color: var(--primary);
-      border-color: var(--primary);
+    .m3-btn-tonal:hover {
+      background: var(--md-sys-color-surface-container-highest);
+      color: #fff;
     }
 
-    /* MPU TILT VISUALIZER */
-    .tilt-box {
+    /* PIXEL ART CANVAS */
+    .canvas-preview-strip {
+      background: var(--md-sys-color-surface-container-high);
+      border-radius: 16px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+
+    .canvas-grid-box {
+      background: var(--md-sys-color-surface-container-highest);
+      border-radius: 20px;
+      padding: 16px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 16px;
+      overflow-x: auto;
+    }
+
+    .pixel-grid {
+      display: grid;
+      gap: 4px;
+      touch-action: none;
+    }
+
+    .pixel-grid.grid-8x8 {
+      grid-template-columns: repeat(8, 36px);
+      grid-template-rows: repeat(8, 36px);
+    }
+
+    .pixel-grid.grid-32x8 {
+      grid-template-columns: repeat(32, 24px);
+      grid-template-rows: repeat(8, 24px);
+      gap: 2px;
+    }
+
+    .pixel-cell {
+      border-radius: 4px;
+      background: #1e2633;
+      cursor: crosshair;
+      transition: transform 0.05s;
+    }
+
+    .pixel-cell:hover {
+      filter: brightness(1.2);
+    }
+
+    .tools-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .palette-circle-group {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .palette-circle {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+
+    .palette-circle.active {
+      transform: scale(1.18);
+      border-color: #fff;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.4);
+    }
+
+    /* ROUTINES CARDS */
+    .routine-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    /* M3 SWITCH */
+    .m3-switch {
+      position: relative;
+      display: inline-block;
+      width: 52px;
+      height: 32px;
+    }
+
+    .m3-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider-toggle {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: var(--md-sys-color-surface-container-highest);
+      border: 2px solid var(--md-sys-color-outline);
+      transition: .25s;
+      border-radius: 32px;
+    }
+
+    .slider-toggle:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 6px;
+      bottom: 6px;
+      background-color: var(--md-sys-color-outline);
+      transition: .25s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider-toggle {
+      background-color: var(--md-sys-color-primary);
+      border-color: var(--md-sys-color-primary);
+    }
+
+    input:checked + .slider-toggle:before {
+      transform: translateX(20px);
+      background-color: var(--md-sys-color-on-primary);
+      width: 20px;
+      height: 20px;
+      left: 4px;
+      bottom: 4px;
+    }
+
+    /* MPU GRAVITY BUBBLE VISUALIZER */
+    .mpu-visualizer-box {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 18px;
       gap: 16px;
+      padding: 16px 0;
     }
 
-    .tilt-bubble {
-      width: 140px;
-      height: 140px;
+    .gravity-disc {
+      width: 180px;
+      height: 180px;
       border-radius: 50%;
-      border: 2px dashed rgba(255, 255, 255, 0.15);
+      border: 2px dashed rgba(255, 255, 255, 0.18);
       position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: radial-gradient(circle, rgba(0, 242, 254, 0.05) 0%, transparent 70%);
+      background: radial-gradient(circle, rgba(126, 212, 252, 0.08) 0%, transparent 70%);
+      box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
     }
 
-    .tilt-indicator {
-      width: 32px;
-      height: 32px;
+    .gravity-ball {
+      width: 38px;
+      height: 38px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #00f2fe, #4facfe);
-      box-shadow: 0 0 18px var(--primary);
+      background: linear-gradient(135deg, var(--md-sys-color-primary), #38bdf8);
+      box-shadow: 0 0 22px var(--md-sys-color-primary);
       position: absolute;
-      transition: transform 0.1s ease-out;
-    }
-
-    .tilt-readings {
-      display: flex;
-      gap: 24px;
-      font-size: 0.85rem;
-      font-weight: 600;
+      transition: transform 0.08s ease-out;
     }
 
     /* CONSOLE LOG */
-    #consoleLog {
-      background: #040811;
-      border-radius: 12px;
-      padding: 12px;
-      font-family: monospace;
-      font-size: 0.72rem;
+    #systemLogTerminal {
+      background: #040810;
+      border-radius: 16px;
+      padding: 14px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
       height: 220px;
       overflow-y: auto;
       color: #38bdf8;
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      line-height: 1.5;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      line-height: 1.6;
     }
 
-    /* BOTTOM NAV BAR */
-    nav {
+    /* TOAST NOTIFICATION */
+    .toast-container {
       position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 72px;
-      backdrop-filter: blur(25px);
-      background: rgba(10, 14, 24, 0.85);
-      border-top: 1px solid var(--card-border);
-      display: flex;
-      justify-content: space-around;
-      align-items: center;
-      padding: 0 10px;
-      z-index: 100;
-      max-width: 540px;
-      margin: 0 auto;
-    }
-
-    .nav-btn {
+      bottom: 24px;
+      right: 24px;
+      z-index: 999;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 5px;
-      color: var(--text-muted);
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-size: 0.7rem;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .toast-msg {
+      background: var(--md-sys-color-surface-container-highest);
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 16px;
+      font-size: 0.88rem;
       font-weight: 600;
-      transition: all 0.2s ease;
-      width: 56px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      animation: toastIn 0.25s cubic-bezier(0.2, 0, 0, 1), toastOut 0.25s 2.75s forwards;
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
 
-    .nav-btn svg {
-      width: 22px;
-      height: 22px;
-      fill: currentColor;
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
-    .nav-btn.active {
-      color: var(--primary);
+    @keyframes toastOut {
+      from { opacity: 1; transform: translateY(0); }
+      to { opacity: 0; transform: translateY(-8px); }
     }
 
-    .nav-btn.active svg {
-      filter: drop-shadow(0 0 8px var(--primary-glow));
+    /* RESPONSIVE QUERIES */
+    @media (max-width: 960px) {
+      aside.nav-rail {
+        display: none;
+      }
+      .mobile-header {
+        display: flex;
+      }
+      nav.mobile-bottom-nav {
+        display: flex;
+      }
+      .app-main {
+        padding: 16px 16px 90px 16px;
+      }
+      .telemetry-row {
+        grid-template-columns: 1fr;
+      }
+      .toast-container {
+        left: 20px;
+        right: 20px;
+        bottom: 84px;
+        align-items: center;
+    /* MATERIAL YOU MODAL DIALOG */
+    .m3-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .m3-modal-card {
+      background: var(--md-sys-color-surface-container-high);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 28px;
+      padding: 24px;
+      max-width: 580px;
+      width: 100%;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      animation: modalFadeIn 0.25s ease-out;
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
     }
   </style>
 </head>
 <body>
 
-  <!-- HEADER -->
-  <header>
-    <div class="brand">
-      <div class="brand-icon">
-        <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7zm-1 18h2v2h-2v-2z"/></svg>
+  <!-- MOBILE TOP BAR -->
+  <header class="mobile-header">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="width:36px;height:36px;border-radius:12px;background:var(--md-sys-color-primary);display:flex;align-items:center;justify-content:center;color:#000;">
+        <svg style="width:20px;height:20px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7zm-1 18h2v2h-2v-2z"/></svg>
       </div>
-      <div class="brand-text">
-        <h1>LED Lamp 360°</h1>
-        <p>ESP32 Bluetooth LE</p>
+      <div>
+        <h2 style="font-size:1rem;font-weight:800;color:#fff;">LED Lamp 360°</h2>
+        <span style="font-size:0.7rem;color:var(--md-sys-color-primary);font-weight:600;">WEB DIGITAL CLONE</span>
       </div>
     </div>
-    <button class="btn-connect" id="btnConnect" onclick="toggleBleConnection()">
-      <span class="pulse-dot"></span>
-      <span id="connectLabel">Kết nối</span>
+    <button class="filter-chip" id="mobileConnectBtn" onclick="toggleBleConnection()">
+      <span class="pulse-dot" id="mobilePulseDot"></span>
+      <span id="mobileConnectLabel">Kết nối</span>
     </button>
   </header>
 
-  <main>
-    <!-- TELEMETRY BAR -->
-    <div class="status-bar">
-      <div class="stat-pill">
-        <span class="stat-label">Nguồn Pin</span>
-        <span class="stat-val" id="statPower">
-          <span>--</span>
-        </span>
-      </div>
-      <div class="stat-pill">
-        <span class="stat-label">Điện áp STAT</span>
-        <span class="stat-val" id="statVolt">-- mV</span>
-      </div>
-      <div class="stat-pill">
-        <span class="stat-label">Chế độ</span>
-        <span class="stat-val" id="statMode">--</span>
-      </div>
-    </div>
-
-    <!-- QUICK BRIGHTNESS & POWER CARD -->
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">
-          <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0-5c.55 0 1 .45 1 1v2c0 .55-.45 1-1 1s-1-.45-1-1V3c0-.55.45-1 1-1zm0 16c.55 0 1 .45 1 1v2c0 .55-.45 1-1 1s-1-.45-1-1v-2c0-.55.45-1 1-1z"/></svg>
-          Độ sáng & Nguồn
+  <div class="app-layout">
+    <!-- 1. SIDEBAR NAVIGATION RAIL (DESKTOP) -->
+    <aside class="nav-rail">
+      <div class="brand-block">
+        <div class="brand-icon-box">
+          <svg style="width:24px;height:24px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7zm-1 18h2v2h-2v-2z"/></svg>
         </div>
-        <button class="power-btn on" id="btnPower" onclick="togglePower()">
-          <svg style="width:20px;height:20px;fill:currentColor" viewBox="0 0 24 24"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42A7.92 7.92 0 0 1 20 12c0 4.42-3.58 8-8 8s-8-3.58-8-8c0-2.45 1.1-4.64 2.84-6.13L5.42 4.45A9.953 9.953 0 0 0 2 12c0 5.52 4.48 10 10 10s10-4.48 10-10c0-3.04-1.36-5.76-3.17-6.83z"/></svg>
+        <div class="brand-info">
+          <h1>LED Lamp 360°</h1>
+          <p>Desktop Digital Clone</p>
+        </div>
+      </div>
+
+      <!-- 4 CANONICAL M3 DESTINATIONS -->
+      <div class="nav-destinations">
+        <button class="nav-item active" onclick="switchMainDestination('studio', this)">
+          <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7zm-1 18h2v2h-2v-2z"/></svg>
+          Hiệu ứng (Studio)
+        </button>
+
+        <button class="nav-item" onclick="switchMainDestination('creative', this)">
+          <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.22 19.67 10.57 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9zm0 15c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>
+          Sáng tạo (Creative)
+        </button>
+
+        <button class="nav-item" onclick="switchMainDestination('routines', this)">
+          <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14h-2V7h2zm0 4h-2v-2h2z"/></svg>
+          Kịch bản (Routines)
+        </button>
+
+        <button class="nav-item" onclick="switchMainDestination('device', this)">
+          <svg viewBox="0 0 24 24"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
+          Thiết bị (Device)
         </button>
       </div>
-      <div class="slider-group">
-        <div class="slider-header">
-          <span>Mức ánh sáng</span>
-          <span class="slider-val" id="brightVal">68 / 255</span>
-        </div>
-        <input type="range" id="brightSlider" min="5" max="255" value="68" oninput="onBrightChange(this.value)">
-      </div>
-    </div>
 
-    <!-- TAB 1: MODES -->
-    <div class="tab-pane active" id="tabModes">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">Bộ tuyển tập 10 Chế độ</div>
-        </div>
-        <div class="modes-grid" id="modesContainer">
-          <!-- Rendered by JS -->
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB 2: COLOR -->
-    <div class="tab-pane" id="tabColor">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">Bánh xe màu 16 Triệu màu</div>
-        </div>
-        <div class="color-section">
-          <canvas id="colorCanvas" width="240" height="240"></canvas>
-          <div class="color-preview-bar">
-            <div class="color-swatch" id="colorSwatch" style="background:#00f2fe"></div>
-            <div class="color-info">
-              <div class="color-hex" id="colorHex">#00F2FE</div>
-              <div class="color-rgb" id="colorRgb">RGB(0, 242, 254)</div>
-            </div>
-            <button class="btn-send" style="padding:10px 16px;font-size:0.85rem;" onclick="applyCurrentColor()">Áp dụng</button>
+      <!-- BLE CONNECTION CARD TRONG SIDEBAR -->
+      <div class="ble-status-card">
+        <div class="ble-card-top">
+          <div class="ble-indicator">
+            <span class="pulse-dot" id="sidebarPulseDot"></span>
+            <span id="sidebarBleText">Chưa kết nối</span>
           </div>
-          <div class="card-title" style="align-self:flex-start;font-size:0.85rem;margin-top:6px;">Bảng màu gợi ý nhanh</div>
-          <div class="palette-grid" id="paletteGrid">
+          <span style="font-size:0.7rem;font-family:var(--font-mono);color:var(--md-sys-color-primary);" id="sidebarDeviceName">--</span>
+        </div>
+        <button class="btn-connect-action" id="btnConnectSidebar" onclick="toggleBleConnection()">
+          <svg style="width:16px;height:16px;fill:currentColor" viewBox="0 0 24 24"><path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/></svg>
+          <span id="sidebarConnectBtnLabel">Kết nối Bluetooth</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- 2. MAIN VIEW AREA -->
+    <main class="app-main">
+
+      <!-- BANNER CẢNH BÁO GIAO THỨC FILE:/// (Tự động hiển thị khi mở file trực tiếp) -->
+      <div id="fileProtocolBanner" style="display:none;margin-bottom:20px;padding:16px 20px;background:rgba(255,180,171,0.12);border:1px solid rgba(255,180,171,0.35);border-radius:20px;align-items:center;justify-content:space-between;gap:16px;">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div style="font-size:1.6rem;">⚠️</div>
+          <div>
+            <div style="font-weight:700;color:var(--md-sys-color-error);font-size:0.95rem;">Đang mở qua giao thức file:/// (Bluetooth bị vô hiệu hóa)</div>
+            <div style="font-size:0.8rem;color:var(--md-sys-color-on-surface-variant);line-height:1.4;">
+              Trình duyệt chặn Web Bluetooth trên file:// để bảo mật phần cứng. Hãy chạy file <code>start_web.bat</code> trong thư mục dự án để mở qua <code>http://localhost:8080</code>!
+            </div>
+          </div>
+        </div>
+        <button class="filter-chip" onclick="showBluetoothHelpModal()" style="border-color:var(--md-sys-color-error);color:var(--md-sys-color-error);white-space:nowrap;cursor:pointer;">
+          Xem cách mở đúng
+        </button>
+      </div>
+
+      <!-- ====================================================================
+           DESTINATION 1: HIỆU ỨNG (STUDIO)
+           ==================================================================== -->
+      <section class="screen-panel active" id="pane-studio">
+        <!-- HERO CARD: NGUỒN, ĐỘ SÁNG & TỐC ĐỘ (MƯỢT 120HZ KHÔNG KHỰNG) -->
+        <div class="m3-card">
+          <div class="card-header-row">
+            <div class="card-header-left">
+              <div class="card-header-icon" id="heroBulbIcon">
+                <svg style="width:24px;height:24px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7zm-1 18h2v2h-2v-2z"/></svg>
+              </div>
+              <div>
+                <div class="card-header-title" id="powerStateTitle">Ánh sáng chủ động</div>
+                <div class="card-header-desc" id="brightnessDescLabel">Độ sáng: 68/255 (26%)</div>
+              </div>
+            </div>
+            <button class="power-toggle-btn on" id="btnPowerHero" onclick="togglePowerState()" title="Bật / Tắt nguồn">
+              <svg style="width:24px;height:24px;fill:currentColor" viewBox="0 0 24 24"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42A7.92 7.92 0 0 1 20 12c0 4.42-3.58 8-8 8s-8-3.58-8-8c0-2.45 1.1-4.64 2.84-6.13L5.42 4.45A9.953 9.953 0 0 0 2 12c0 5.52 4.48 10 10 10s10-4.48 10-10c0-3.04-1.36-5.76-3.17-6.83z"/></svg>
+            </button>
+          </div>
+
+          <!-- THANH TRƯỢT ĐỘ SÁNG M3 (KÉO MƯỢT 120HZ) -->
+          <div class="slider-container">
+            <div class="slider-track-wrap">
+              <svg style="width:20px;height:20px;fill:var(--md-sys-color-on-surface-variant)" viewBox="0 0 24 24"><path d="M20 15.31L23.31 12 20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69zM12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>
+              <input type="range" class="m3-slider" id="sliderBrightness" min="5" max="255" value="68" oninput="onBrightnessDrag(this.value)" onchange="onBrightnessCommit(this.value)">
+              <svg style="width:20px;height:20px;fill:var(--md-sys-color-primary)" viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0-5c.55 0 1 .45 1 1v2c0 .55-.45 1-1 1s-1-.45-1-1V3c0-.55.45-1 1-1zm0 16c.55 0 1 .45 1 1v2c0 .55-.45 1-1 1s-1-.45-1-1v-2c0-.55.45-1 1-1z"/></svg>
+            </div>
+            <!-- QUICK BRIGHTNESS CHIPS -->
+            <div class="chip-group">
+              <button class="filter-chip" onclick="setQuickBrightness(64, '25%')">25%</button>
+              <button class="filter-chip" onclick="setQuickBrightness(128, '50%')">50%</button>
+              <button class="filter-chip" onclick="setQuickBrightness(192, '75%')">75%</button>
+              <button class="filter-chip" onclick="setQuickBrightness(255, '100%')">100%</button>
+            </div>
+          </div>
+
+          <hr style="border:none;border-top:1px solid var(--md-sys-color-outline-variant);margin:20px 0 16px 0;">
+
+          <!-- THANH TRƯỢT TỐC ĐỘ CHUYỂN ĐỘNG HIỆU ỨNG -->
+          <div class="slider-container">
+            <div class="slider-label-row">
+              <span style="display:flex;align-items:center;gap:6px;">
+                <svg style="width:18px;height:18px;fill:var(--md-sys-color-secondary)" viewBox="0 0 24 24"><path d="M20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1 10 10 0 0 0-.28-10.43zM10.59 15.41a2 2 0 0 0 2.83 0l5.66-8.49-8.49 5.66a2 2 0 0 0 0 2.83z"/></svg>
+                Tốc độ hiệu ứng
+              </span>
+              <span id="speedValueLabel" style="color:var(--md-sys-color-secondary);font-weight:700;">50%</span>
+            </div>
+            <input type="range" class="m3-slider" id="sliderSpeed" min="10" max="100" value="50" oninput="onSpeedChange(this.value)">
+          </div>
+        </div>
+
+        <!-- TELEMETRY TONAL CHIPS (PIN, MPU, RAM) -->
+        <div class="telemetry-row">
+          <div class="telemetry-pill">
+            <div class="telemetry-icon-box">
+              <svg style="width:20px;height:20px;fill:currentColor" viewBox="0 0 24 24"><path d="M17 5v16c0 .55-.45 1-1 1H8c-.55 0-1-.45-1-1V5c0-.55.45-1 1-1h2V2h4v2h2c.55 0 1 .45 1 1zm-2 1H9v14h6V6z"/></svg>
+            </div>
+            <div class="telemetry-data">
+              <h4 id="telemetryPwrState">DÙNG PIN</h4>
+              <p id="telemetryStatMv">-- mV</p>
+            </div>
+          </div>
+
+          <div class="telemetry-pill">
+            <div class="telemetry-icon-box">
+              <svg style="width:20px;height:20px;fill:var(--md-sys-color-secondary)" viewBox="0 0 24 24"><path d="M16.48 2.52c3.27 1.55 5.61 4.72 5.97 8.48h1.5C23.44 4.84 18.29 0 12 0l-.66.03 3.81 3.81 1.33-1.32zM7.52 21.48C4.25 19.94 1.91 16.76 1.55 13H.05C.56 19.16 5.71 24 12 24l.66-.03-3.81-3.81-1.33 1.32z"/></svg>
+            </div>
+            <div class="telemetry-data">
+              <h4>MPU-6050</h4>
+              <p id="telemetryMpuText">0.0° / 0.0°</p>
+            </div>
+          </div>
+
+          <div class="telemetry-pill">
+            <div class="telemetry-icon-box">
+              <svg style="width:20px;height:20px;fill:var(--md-sys-color-tertiary)" viewBox="0 0 24 24"><path d="M21 9h-2V7h-2V5h-2V3h-2v2h-2V3H9v2H7v2H5v2H3v2h2v2H3v2h2v2h2v2h2v2h2v-2h2v2h2v-2h2v-2h2v-2h2v-2h-2v-2h2V9zm-4 8H7V7h10v10z"/></svg>
+            </div>
+            <div class="telemetry-data">
+              <h4>BỘ NHỚ RAM</h4>
+              <p id="telemetryHeapText">-- KB</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- THƯ VIỆN 13 CHẾ ĐỘ ÁNH SÁNG CHUẨN M3 -->
+        <div class="card-header-row" style="margin-bottom:14px;">
+          <div>
+            <h2 style="font-size:1.1rem;font-weight:800;color:#fff;">Thư viện 13 Chế độ</h2>
+            <p style="font-size:0.8rem;color:var(--md-sys-color-on-surface-variant)">Hiển thị quang học 360° & Chạm để kích hoạt ngay</p>
+          </div>
+          <span class="filter-chip" style="cursor:default;">13 Chế độ</span>
+        </div>
+
+        <div class="modes-grid" id="modesContainer">
+          <!-- Rendered dynamically by JavaScript -->
+        </div>
+      </section>
+
+
+      <!-- ====================================================================
+           DESTINATION 2: SÁNG TẠO (CREATIVE)
+           ==================================================================== -->
+      <section class="screen-panel" id="pane-creative">
+        <!-- SECONDARY TAB ROW -->
+        <div class="secondary-tabs">
+          <button class="sub-tab-btn active" onclick="switchCreativeSubTab('color', this)">
+            <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.22 19.67 10.57 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9zm0 15c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>
+            Bảng màu RGB
+          </button>
+          <button class="sub-tab-btn" onclick="switchCreativeSubTab('marquee', this)">
+            <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M2.5 4v3h5v12h3V7h5V4h-13zm19 5h-9v3h3v7h3v-7h3V9z"/></svg>
+            Chữ xoay 360°
+          </button>
+          <button class="sub-tab-btn" onclick="switchCreativeSubTab('pixelart', this)">
+            <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M3 3v8h8V3H3zm6 6H5V5h4v4zm-6 4v8h8v-8H3zm6 6H5v-4h4v4zm4-16v8h8V3h-8zm6 6h-4V5h4v4zm-6 4v8h8v-8h-8zm6 6h-4v-4h4v4z"/></svg>
+            Pixel Art Studio
+          </button>
+        </div>
+
+        <!-- 2A. BẢNG MÀU RGB -->
+        <div class="creative-sub-pane active" id="subpane-color">
+          <div class="m3-card">
+            <!-- COLOR PREVIEW HERO CARD -->
+            <div class="color-preview-hero" id="colorHeroPreview" style="background:#00F2FE;" onclick="applyCurrentColor()">
+              <div class="color-badge-box">
+                <span class="code" id="colorHeroCode">RGB(0, 242, 254)</span>
+                <span style="font-size:0.75rem;opacity:0.8;">• Chạm để áp dụng màu tĩnh</span>
+              </div>
+            </div>
+
+            <!-- HUE SLIDER -->
+            <div class="slider-container">
+              <div class="slider-label-row">
+                <span>Dải sắc độ (Hue)</span>
+                <span id="hueAngleLabel" style="color:var(--md-sys-color-primary);font-weight:700;">180°</span>
+              </div>
+              <div class="hue-gradient-bar"></div>
+              <input type="range" class="m3-slider" id="sliderHue" min="0" max="360" value="180" oninput="onHueSliderChange(this.value)">
+            </div>
+
+            <hr style="border:none;border-top:1px solid var(--md-sys-color-outline-variant);margin:24px 0 16px 0;">
+
+            <!-- PRESET SWATCHES -->
+            <div class="card-header-title" style="font-size:0.95rem;">Bảng 9 màu tinh chọn chuẩn M3</div>
+            <div class="swatches-grid" id="swatchesContainer">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- 2B. CHỮ XOAY 360° (MARQUEE) -->
+        <div class="creative-sub-pane" id="subpane-marquee" style="display:none;">
+          <div class="m3-card">
+            <div class="card-header-row">
+              <div class="card-header-left">
+                <div class="card-header-icon">
+                  <svg style="width:24px;height:24px;fill:currentColor" viewBox="0 0 24 24"><path d="M2.5 4v3h5v12h3V7h5V4h-13zm19 5h-9v3h3v7h3v-7h3V9z"/></svg>
+                </div>
+                <div>
+                  <div class="card-header-title">Chữ ma trận cuộn 360°</div>
+                  <div class="card-header-desc">Nội dung văn bản cuộn trôi liên tục quanh thân đèn</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="input-row">
+              <input type="text" class="m3-text-input" id="marqueeTextInput" placeholder="Nhập tin nhắn hiển thị..." value="HELLO ESP32 MATRIX 360">
+              <button class="m3-btn-primary" onclick="sendMarqueeText()">
+                <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                Bắn chữ lên đèn
+              </button>
+            </div>
+
+            <div style="margin-top:18px;">
+              <div class="slider-label-row" style="margin-bottom:8px;">Màu sắc chữ:</div>
+              <div class="chip-group" id="marqueeColorChips">
+                <button class="filter-chip active" onclick="setMarqueeColor(0, 242, 254, this)">Cyan Neon</button>
+                <button class="filter-chip" onclick="setMarqueeColor(255, 30, 30, this)">Đỏ Tươi</button>
+                <button class="filter-chip" onclick="setMarqueeColor(255, 215, 0, this)">Vàng Nắng</button>
+                <button class="filter-chip" onclick="setMarqueeColor(20, 240, 70, this)">Xanh Lá</button>
+                <button class="filter-chip" onclick="setMarqueeColor(200, 50, 255, this)">Tím Cực Quang</button>
+                <button class="filter-chip" onclick="setMarqueeColor(255, 255, 255, this)">Trắng Tinh</button>
+              </div>
+            </div>
+
+            <div style="margin-top:20px;">
+              <div class="card-header-title" style="font-size:0.9rem;margin-bottom:10px;">Tin nhắn nhanh mẫu một chạm:</div>
+              <div class="chip-group">
+                <button class="filter-chip" onclick="setQuickMarquee('CHUC MUNG NAM MOI')">🎉 Năm Mới</button>
+                <button class="filter-chip" onclick="setQuickMarquee('HAPPY BIRTHDAY')">🎂 Sinh Nhật</button>
+                <button class="filter-chip" onclick="setQuickMarquee('WELCOME HOME')">🏡 Về Nhà</button>
+                <button class="filter-chip" onclick="setQuickMarquee('COFFEE TIME')">☕ Cà Phê</button>
+                <button class="filter-chip" onclick="setQuickMarquee('ON AIR / LIVE')">🔴 On Air</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2C. PIXEL ART STUDIO -->
+        <div class="creative-sub-pane" id="subpane-pixelart" style="display:none;">
+          <div class="m3-card">
+            <div class="secondary-tabs" style="margin-bottom:14px;">
+              <button class="sub-tab-btn active" id="btnMode4Slots" onclick="toggleCanvasMode('4slots')">4 Mặt Độc Lập (8x8)</button>
+              <button class="sub-tab-btn" id="btnModeFull32x8" onclick="toggleCanvasMode('full32x8')">Canvas 32x8 Toàn Cảnh</button>
+            </div>
+
+            <!-- CHẾ ĐỘ 1: 4 MẶT ĐỘC LẬP (8x8) -->
+            <div id="canvasView4Slots">
+              <!-- 4 CHIPS CHỌN MẶT -->
+              <div class="chip-group" style="margin-bottom:14px;">
+                <button class="filter-chip active" id="chipSlot1" onclick="selectSlot(0)">Mặt 1 (Ô 1)</button>
+                <button class="filter-chip" id="chipSlot2" onclick="selectSlot(1)">Mặt 2 (Ô 2)</button>
+                <button class="filter-chip" id="chipSlot3" onclick="selectSlot(2)">Mặt 3 (Ô 3)</button>
+                <button class="filter-chip" id="chipSlot4" onclick="selectSlot(3)">Mặt 4 (Ô 4)</button>
+              </div>
+
+              <!-- TOÀN CẢNH PREVIEW 32x8 STRIP -->
+              <div class="canvas-preview-strip">
+                <div style="font-size:0.75rem;color:var(--md-sys-color-on-surface-variant);margin-bottom:6px;">Toàn cảnh 4 Mặt (32x8):</div>
+                <canvas id="slotPreviewCanvas" width="256" height="64" style="width:100%;height:48px;border-radius:8px;background:#000;image-rendering:pixelated;"></canvas>
+              </div>
+
+              <!-- TOOLBAR: MÀU, TẨY, XÓA, TÔ -->
+              <div class="tools-toolbar">
+                <div class="palette-circle-group" id="pixelColorPalette">
+                  <!-- Rendered by JS -->
+                </div>
+                <div style="display:flex;gap:8px;">
+                  <button class="filter-chip" id="btnEraser" onclick="toggleEraser()">🧹 Tẩy</button>
+                  <button class="filter-chip" onclick="clearCurrentSlot()">Xóa ô</button>
+                  <button class="filter-chip" onclick="fillCurrentSlot()">Tô màu</button>
+                </div>
+              </div>
+
+              <!-- KHUNG VẼ 8x8 CHO MẶT ĐANG CHỌN -->
+              <div class="canvas-grid-box">
+                <div class="pixel-grid grid-8x8" id="grid8x8">
+                  <!-- 64 cells generated by JS -->
+                </div>
+              </div>
+
+              <!-- PRESETS 8X8 -->
+              <div style="margin-bottom:16px;">
+                <div class="card-header-title" style="font-size:0.85rem;margin-bottom:8px;">Mẫu nhanh 8x8:</div>
+                <div class="chip-group" id="slotPresetsChipGroup">
+                  <!-- Rendered by JS -->
+                </div>
+              </div>
+
+              <!-- NÚT GỬI LÊN ĐÈN -->
+              <div style="display:flex;gap:12px;">
+                <button class="m3-btn-tonal" style="flex:1;" onclick="sendCurrentSlot()">Gửi Mặt đang chọn</button>
+                <button class="m3-btn-primary" style="flex:1.4;" onclick="sendAllFourSlots()">Gửi cả 4 Mặt (Mode 11)</button>
+              </div>
+            </div>
+
+            <!-- CHẾ ĐỘ 2: CANVAS 32x8 TOÀN CẢNH -->
+            <div id="canvasViewFull32x8" style="display:none;">
+              <!-- TOOLBAR -->
+              <div class="tools-toolbar">
+                <div class="palette-circle-group" id="pixelColorPaletteFull">
+                  <!-- Rendered by JS -->
+                </div>
+                <div style="display:flex;gap:8px;">
+                  <button class="filter-chip" id="btnEraserFull" onclick="toggleEraser()">🧹 Tẩy</button>
+                  <button class="filter-chip" onclick="clearFullCanvas()">Xóa hết</button>
+                </div>
+              </div>
+
+              <!-- KHUNG VẼ 32x8 -->
+              <div class="canvas-grid-box" style="padding:14px;overflow-x:auto;">
+                <div class="pixel-grid grid-32x8" id="grid32x8">
+                  <!-- 256 cells generated by JS -->
+                </div>
+              </div>
+
+              <!-- PRESETS 32X8 -->
+              <div style="margin-bottom:16px;">
+                <div class="card-header-title" style="font-size:0.85rem;margin-bottom:8px;">Thư viện tranh 32x8 toàn cảnh:</div>
+                <div class="chip-group" id="fullCanvasPresetsGroup">
+                  <!-- Rendered by JS -->
+                </div>
+              </div>
+
+              <button class="m3-btn-primary" style="width:100%;height:48px;" onclick="sendFullCanvasToLamp()">
+                <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                Bắn toàn bộ Canvas 32x8 lên đèn
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ====================================================================
+           DESTINATION 3: KỊCH BẢN (ROUTINES)
+           ==================================================================== -->
+      <section class="screen-panel" id="pane-routines">
+        <!-- 3A. BÁO THỨC BÌNH MINH -->
+        <div class="m3-card">
+          <div class="card-header-row">
+            <div class="card-header-left">
+              <div class="card-header-icon" style="background:rgba(245, 158, 11, 0.2);color:var(--amber-warm);">
+                <svg style="width:24px;height:24px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0-5c.55 0 1 .45 1 1v2c0 .55-.45 1-1 1s-1-.45-1-1V3c0-.55.45-1 1-1zm0 16c.55 0 1 .45 1 1v2c0 .55-.45 1-1 1s-1-.45-1-1v-2c0-.55.45-1 1-1z"/></svg>
+              </div>
+              <div>
+                <div class="card-header-title">Báo thức bình minh</div>
+                <div class="card-header-desc">Ánh sáng tăng dần tự nhiên trước giờ dậy</div>
+              </div>
+            </div>
+            <label class="m3-switch">
+              <input type="checkbox" id="switchSunrise" onchange="saveRoutineSettings()">
+              <span class="slider-toggle"></span>
+            </label>
+          </div>
+
+          <div class="routine-row">
+            <span style="font-size:0.9rem;font-weight:600;">Giờ thức dậy:</span>
+            <input type="time" class="m3-text-input" id="timeSunrise" value="06:30" style="width:140px;padding:8px 12px;font-weight:700;color:var(--md-sys-color-primary);" onchange="saveRoutineSettings()">
+          </div>
+
+          <div class="slider-container" style="margin-bottom:16px;">
+            <div class="slider-label-row">
+              <span>Thời gian sáng dần</span>
+              <span id="sunriseDurationText" style="color:var(--md-sys-color-primary);font-weight:700;">15 phút trước</span>
+            </div>
+            <input type="range" class="m3-slider" id="sliderSunriseDuration" min="5" max="30" step="5" value="15" oninput="document.getElementById('sunriseDurationText').innerText = this.value + ' phút trước'; saveRoutineSettings()">
+          </div>
+
+          <button class="m3-btn-tonal" style="width:100%;" onclick="runSunriseDemo()">
+            <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5z"/></svg>
+            Chạy thử bình minh (Demo 10s)
+          </button>
+        </div>
+
+        <!-- 3B. ĐÈN NGỦ TỰ ĐỘNG -->
+        <div class="m3-card">
+          <div class="card-header-row">
+            <div class="card-header-left">
+              <div class="card-header-icon" style="background:rgba(209, 188, 255, 0.2);color:var(--md-sys-color-tertiary);">
+                <svg style="width:24px;height:24px;fill:currentColor" viewBox="0 0 24 24"><path d="M12.3 2a10 10 0 0 0-1.9 20 10 10 0 0 0 8.6-4.9c-.6.1-1.3.1-2 .1a9.9 9.9 0 0 1-9.9-9.9c0-1.9.5-3.6 1.4-5.1.3-.5 0-1.1-.5-1.2h-.1l-.6-.1z"/></svg>
+              </div>
+              <div>
+                <div class="card-header-title">Đèn ngủ tự động</div>
+                <div class="card-header-desc">Nhịp thở êm dịu ban đêm và tự tắt</div>
+              </div>
+            </div>
+            <label class="m3-switch">
+              <input type="checkbox" id="switchBedtime" onchange="saveRoutineSettings()">
+              <span class="slider-toggle"></span>
+            </label>
+          </div>
+
+          <div class="routine-row">
+            <span style="font-size:0.9rem;font-weight:600;">Giờ đi ngủ:</span>
+            <input type="time" class="m3-text-input" id="timeBedtime" value="23:00" style="width:140px;padding:8px 12px;font-weight:700;color:var(--md-sys-color-tertiary);" onchange="saveRoutineSettings()">
+          </div>
+
+          <div class="routine-row">
+            <span style="font-size:0.85rem;color:var(--md-sys-color-on-surface-variant);">Tự tắt sau:</span>
+            <div class="chip-group" id="bedtimeDurationChips">
+              <button class="filter-chip" onclick="setBedtimeDuration(15, this)">15p</button>
+              <button class="filter-chip active" onclick="setBedtimeDuration(30, this)">30p</button>
+              <button class="filter-chip" onclick="setBedtimeDuration(45, this)">45p</button>
+              <button class="filter-chip" onclick="setBedtimeDuration(60, this)">60p</button>
+            </div>
+          </div>
+
+          <button class="m3-btn-tonal" style="width:100%;" onclick="activateBedtimeRoutine()">
+            <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M12.3 2a10 10 0 0 0-1.9 20 10 10 0 0 0 8.6-4.9c-.6.1-1.3.1-2 .1a9.9 9.9 0 0 1-9.9-9.9c0-1.9.5-3.6 1.4-5.1.3-.5 0-1.1-.5-1.2h-.1l-.6-.1z"/></svg>
+            Bật đèn ngủ ngay (Tự tắt)
+          </button>
+        </div>
+
+        <!-- 3C. THỜI TIẾT THÔNG MINH TỰ ĐỘNG -->
+        <div class="m3-card">
+          <div class="card-header-row">
+            <div class="card-header-left">
+              <div class="card-header-icon" style="background:rgba(144, 211, 170, 0.2);color:var(--green-jade);">
+                <svg style="width:24px;height:24px;fill:currentColor" viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>
+              </div>
+              <div>
+                <div class="card-header-title">Thời tiết thông minh</div>
+                <div class="card-header-desc">Đồng bộ nhiệt độ và dự báo thời gian thực</div>
+              </div>
+            </div>
+            <!-- CHỌN THÀNH PHỐ -->
+            <select class="m3-text-input" id="citySelect" style="width:150px;padding:8px 12px;font-weight:700;" onchange="onCitySelected(this.value)">
+              <option value="Hà Nội">Hà Nội</option>
+              <option value="TP. Hồ Chí Minh">TP. HCM</option>
+              <option value="Đà Nẵng">Đà Nẵng</option>
+              <option value="Hải Phòng">Hải Phòng</option>
+              <option value="Cần Thơ">Cần Thơ</option>
+            </select>
+          </div>
+
+          <div class="routine-row">
+            <div>
+              <div style="font-size:0.9rem;font-weight:600;">Tự đổi hoạt hình theo thời tiết</div>
+              <div style="font-size:0.75rem;color:var(--md-sys-color-on-surface-variant)">Đèn tự chuyển hiệu ứng tương ứng trời mưa, nắng, sấm chớp</div>
+            </div>
+            <label class="m3-switch">
+              <input type="checkbox" id="switchAutoWeather" onchange="saveRoutineSettings()">
+              <span class="slider-toggle"></span>
+            </label>
+          </div>
+
+          <!-- OVERVIEW WEATHER CARD -->
+          <div style="background:var(--md-sys-color-surface-container-high);border-radius:18px;padding:18px;margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <h3 style="font-size:1.1rem;font-weight:800;color:#fff;" id="weatherDisplayName">☀️ Trời Nắng</h3>
+                <p style="font-size:0.85rem;color:var(--md-sys-color-on-surface-variant);margin-top:2px;" id="weatherTempDetail">Nhiệt độ hiện tại: 28°C</p>
+              </div>
+              <span style="font-size:2.4rem;font-weight:800;color:var(--md-sys-color-primary);" id="weatherTempBig">28°</span>
+            </div>
+            <!-- TRẠNG THÁI TỰ ĐỘNG ĐỒNG BỘ MỖI 15 PHÚT -->
+            <div style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:0.78rem;color:var(--md-sys-color-on-surface-variant);">
+              <svg style="width:16px;height:16px;fill:var(--green-jade)" viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+              <span id="weatherAutoSyncStatusText">Tự động đồng bộ mỗi 15 phút (vừa cập nhật lúc 00:00)</span>
+            </div>
+          </div>
+
+          <button class="m3-btn-tonal" style="width:100%;" onclick="refreshWeatherManually()">
+            <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+            Làm mới & đồng bộ ngay xuống đèn
+          </button>
+        </div>
+      </section>
+
+
+      <!-- ====================================================================
+           DESTINATION 4: THIẾT BỊ (DEVICE)
+           ==================================================================== -->
+      <section class="screen-panel" id="pane-device">
+        <!-- 4A. MPU-6050 & POMODORO -->
+        <div class="m3-card">
+          <div class="card-header-row">
+            <div class="card-header-left">
+              <div class="card-header-icon">
+                <svg style="width:24px;height:24px;fill:currentColor" viewBox="0 0 24 24"><path d="M16.48 2.52c3.27 1.55 5.61 4.72 5.97 8.48h1.5C23.44 4.84 18.29 0 12 0l-.66.03 3.81 3.81 1.33-1.32zM7.52 21.48C4.25 19.94 1.91 16.76 1.55 13H.05C.56 19.16 5.71 24 12 24l.66-.03-3.81-3.81-1.33 1.32z"/></svg>
+              </div>
+              <div>
+                <div class="card-header-title">Con quay MPU-6050 & Trọng lực</div>
+                <div class="card-header-desc" id="mpuAngleDescText">Pitch: 0.0° | Roll: 0.0°</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- BUBBLE VISUALIZER -->
+          <div class="mpu-visualizer-box">
+            <div class="gravity-disc">
+              <div class="gravity-ball" id="gravityBall"></div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;margin-top:14px;">
+            <button class="m3-btn-tonal" style="flex:1;" onclick="triggerPomodoroCommand()">
+              <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14h-2V7h2zm0 4h-2v-2h2z"/></svg>
+              Pomodoro 25p
+            </button>
+            <button class="m3-btn-tonal" style="flex:1;" onclick="syncSystemTimeNow()">
+              <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14h-2V7h2zm0 4h-2v-2h2z"/></svg>
+              Đồng bộ RTC
+            </button>
+          </div>
+        </div>
+
+        <!-- 4B. ĐỒNG BỘ THÔNG BÁO APP (MÔ PHỎNG & CHỚP RGB) -->
+        <div class="m3-card">
+          <div class="card-header-row">
+            <div class="card-header-left">
+              <div class="card-header-icon" style="background:rgba(208, 188, 255, 0.2);color:var(--md-sys-color-tertiary);">
+                <svg style="width:24px;height:24px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+              </div>
+              <div>
+                <div class="card-header-title">Đồng bộ thông báo app</div>
+                <div class="card-header-desc">Chạm vào từng app để thử chớp màu tương ứng</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px;" id="notifAppListContainer">
             <!-- Rendered by JS -->
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- TAB 3: MARQUEE -->
-    <div class="tab-pane" id="tabMarquee">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">Chạy chữ cuộn 360°</div>
-        </div>
-        <div class="text-input-group">
-          <input type="text" class="input-box" id="marqueeText" placeholder="Nhập chữ cần chạy (Ví dụ: HELLO ESP32)" value="HELLO WORLD">
-          <div class="slider-header" style="margin-bottom:2px;">
-            <span>Màu chữ</span>
-            <input type="color" id="textColorPicker" value="#00f2fe" style="border:none;background:none;cursor:pointer;width:32px;height:32px;">
+        <!-- 4C. NẠP FIRMWARE BLE (OTA) -->
+        <div class="m3-card">
+          <div class="card-header-row">
+            <div class="card-header-left">
+              <div class="card-header-icon" style="background:rgba(126, 212, 252, 0.2);color:var(--md-sys-color-primary);">
+                <svg style="width:24px;height:24px;fill:currentColor" viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
+              </div>
+              <div>
+                <div class="card-header-title">Nạp Firmware BLE (OTA)</div>
+                <div class="card-header-desc">Nâng cấp phần mềm không dây trực tiếp từ trình duyệt</div>
+              </div>
+            </div>
           </div>
-          <button class="btn-send" onclick="sendMarqueeText()">
-            <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-            Bắn chữ lên đèn
+
+          <div style="display:flex;gap:12px;margin-bottom:14px;">
+            <button class="m3-btn-tonal" style="flex:1;" onclick="sendCommand('ota')">Vào mode OTA</button>
+            <button class="m3-btn-tonal" style="flex:1;" onclick="sendCommand('ota abort')">Hủy OTA</button>
+          </div>
+
+          <input type="file" id="otaFileInput" accept=".bin" style="display:none;" onchange="onOtaFileSelected(this.files)">
+          <button class="m3-btn-primary" style="width:100%;height:48px;" onclick="document.getElementById('otaFileInput').click()">
+            <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+            Chọn file firmware.bin để nạp
           </button>
-          <div class="card-title" style="font-size:0.85rem;margin-top:10px;">Tin nhắn nhanh mẫu</div>
-          <div class="quick-text-chips">
-            <span class="text-chip" onclick="quickSend('CHUC MUNG NAM MOI')">CHUC MUNG NAM MOI</span>
-            <span class="text-chip" onclick="quickSend('HAPPY BIRTHDAY')">HAPPY BIRTHDAY</span>
-            <span class="text-chip" onclick="quickSend('WELCOME')">WELCOME</span>
-            <span class="text-chip" onclick="quickSend('ON AIR / LIVE')">ON AIR / LIVE</span>
-            <span class="text-chip" onclick="quickSend('GOOD NIGHT')">GOOD NIGHT</span>
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- TAB 4: SENSORS & TELEMETRY -->
-    <div class="tab-pane" id="tabSensors">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">Con quay hồi chuyển MPU-6050</div>
-        </div>
-        <div class="tilt-box">
-          <div class="tilt-bubble">
-            <div class="tilt-indicator" id="tiltIndicator"></div>
-          </div>
-          <div class="tilt-readings">
-            <span>Pitch: <span id="valPitch" style="color:var(--primary)">0.0°</span></span>
-            <span>Roll: <span id="valRoll" style="color:var(--accent)">0.0°</span></span>
+          <div id="otaProgressBlock" style="display:none;margin-top:14px;">
+            <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:6px;">
+              <span id="otaStatusLabel">Đang chuẩn bị...</span>
+              <span id="otaPercentLabel" style="font-weight:700;color:var(--md-sys-color-primary);">0%</span>
+            </div>
+            <div style="height:8px;border-radius:4px;background:var(--md-sys-color-surface-container-highest);overflow:hidden;">
+              <div id="otaProgressBar" style="height:100%;width:0%;background:var(--md-sys-color-primary);transition:width 0.1s;"></div>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">Nhật ký kết nối & CLI Console</div>
-        </div>
-        <div id="consoleLog"></div>
-      </div>
-    </div>
-  </main>
 
-  <!-- BOTTOM NAV BAR -->
-  <nav>
-    <button class="nav-btn active" onclick="switchTab('tabModes', this)">
-      <svg viewBox="0 0 24 24"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>
+        <!-- 4D. NHẬT KÝ HỆ THỐNG & CLI CONSOLE -->
+        <div class="m3-card">
+          <div class="card-header-row">
+            <div class="card-header-left">
+              <div class="card-header-icon">
+                <svg style="width:24px;height:24px;fill:currentColor" viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12z"/></svg>
+              </div>
+              <div>
+                <div class="card-header-title">Nhật ký kết nối & CLI Console</div>
+                <div class="card-header-desc">Luồng sự kiện UART JSON & Binary GATT Frame</div>
+              </div>
+            </div>
+            <button class="filter-chip" onclick="document.getElementById('systemLogTerminal').innerHTML = '';">Xóa log</button>
+          </div>
+
+          <div id="systemLogTerminal"></div>
+
+          <div class="input-row" style="margin-top:12px;">
+            <input type="text" class="m3-text-input" id="cliInput" placeholder="Nhập lệnh (vd: mode 1, bright 150, pomo)..." onkeydown="if(event.key==='Enter') sendCliCommand()">
+            <button class="m3-btn-tonal" onclick="sendCliCommand()">Gửi lệnh</button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MOBILE BOTTOM NAV BAR -->
+  <nav class="mobile-bottom-nav">
+    <button class="mobile-nav-btn active" onclick="switchMainDestination('studio', this)">
+      <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7zm-1 18h2v2h-2v-2z"/></svg>
       Hiệu ứng
     </button>
-    <button class="nav-btn" onclick="switchTab('tabColor', this)">
+    <button class="mobile-nav-btn" onclick="switchMainDestination('creative', this)">
       <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.22 19.67 10.57 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9zm0 15c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>
-      Bảng màu
+      Sáng tạo
     </button>
-    <button class="nav-btn" onclick="switchTab('tabMarquee', this)">
-      <svg viewBox="0 0 24 24"><path d="M2.5 4v3h5v12h3V7h5V4h-13zm19 5h-9v3h3v7h3v-7h3V9z"/></svg>
-      Chạy chữ
+    <button class="mobile-nav-btn" onclick="switchMainDestination('routines', this)">
+      <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14h-2V7h2zm0 4h-2v-2h2z"/></svg>
+      Kịch bản
     </button>
-    <button class="nav-btn" onclick="switchTab('tabSensors', this)">
-      <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 17.93V18a1 1 0 0 0-2 0v1.93A8 8 0 0 1 4.07 13H6a1 1 0 0 0 0-2H4.07A8 8 0 0 1 11 4.07V6a1 1 0 0 0 2 0V4.07A8 8 0 0 1 19.93 11H18a1 1 0 0 0 0 2h1.93A8 8 0 0 1 13 19.93z"/></svg>
-      Cảm biến
+    <button class="mobile-nav-btn" onclick="switchMainDestination('device', this)">
+      <svg viewBox="0 0 24 24"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
+      Thiết bị
     </button>
   </nav>
 
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- MODAL: HƯỚNG DẪN WEB BLUETOOTH -->
+  <div class="m3-modal-backdrop" id="bluetoothHelpModal" style="display:none;" onclick="if(event.target===this)closeBluetoothHelpModal()">
+    <div class="m3-modal-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(255,180,171,0.2);display:flex;align-items:center;justify-content:center;color:var(--md-sys-color-error);font-size:1.4rem;">⚠️</div>
+          <div>
+            <h3 style="font-size:1.1rem;font-weight:700;color:#fff;">Khắc phục: Web Bluetooth Bị Chặn</h3>
+            <p style="font-size:0.75rem;color:var(--md-sys-color-on-surface-variant);">Web Bluetooth API globally disabled</p>
+          </div>
+        </div>
+        <button onclick="closeBluetoothHelpModal()" style="background:transparent;border:none;color:var(--md-sys-color-on-surface-variant);cursor:pointer;font-size:1.4rem;padding:4px 8px;">✕</button>
+      </div>
+
+      <div style="font-size:0.85rem;line-height:1.6;color:var(--md-sys-color-on-surface-variant);display:flex;flex-direction:column;gap:14px;">
+        <div style="background:var(--md-sys-color-surface-container);padding:14px;border-radius:14px;border-left:4px solid var(--md-sys-color-primary);">
+          <strong style="color:#fff;display:block;margin-bottom:4px;">1. Mở file trực tiếp (file:///) — Nguyên nhân phổ biến nhất:</strong>
+          Trình duyệt Chromium (Chrome/Edge) <strong>chặn 100%</strong> tính năng Bluetooth khi mở file trực tiếp từ ổ cứng.<br>
+          👉 <strong>Cách khắc phục:</strong> Chạy file <code>start_web.bat</code> trong thư mục dự án để mở trang qua <code>http://localhost:8080</code>.
+        </div>
+
+        <div style="background:var(--md-sys-color-surface-container);padding:14px;border-radius:14px;border-left:4px solid var(--amber-warm);">
+          <strong style="color:#fff;display:block;margin-bottom:4px;">2. Nếu bạn đang dùng Brave Browser:</strong>
+          Brave tắt Bluetooth mặc định để bảo mật vân tay số.<br>
+          👉 <strong>Cách khắc phục:</strong> Dùng <strong>Google Chrome</strong> hoặc <strong>Microsoft Edge</strong>. Hoặc mở <code>brave://settings/content/bluetoothDevices</code> và chọn <em>"Sites can ask to connect to Bluetooth devices"</em>.
+        </div>
+
+        <div style="background:var(--md-sys-color-surface-container);padding:14px;border-radius:14px;border-left:4px solid var(--md-sys-color-secondary);">
+          <strong style="color:#fff;display:block;margin-bottom:4px;">3. Kiểm tra Bluetooth máy tính:</strong>
+          Đảm bảo công tắc Bluetooth trên máy tính đã được <strong>Bật (ON)</strong> trong <em>Windows Settings &gt; Bluetooth &amp; devices</em>.
+        </div>
+      </div>
+
+      <div style="margin-top:20px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+        <button class="filter-chip" onclick="copyLocalhostUrl()">
+          📋 Sao chép http://localhost:8080
+        </button>
+        <button class="filter-chip active" onclick="closeBluetoothHelpModal()">
+          Đã hiểu
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       JAVASCRIPT: LOGIC ĐIỀU KHIỂN & WEB BLUETOOTH CLONE CHUẨN ANDROID
+       ======================================================================== -->
   <script>
     // UUIDs CHUẨN NORDIC UART SERVICE (NUS)
     const NUS_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-    const NUS_RX_UUID      = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // App Write -> ESP32
-    const NUS_TX_UUID      = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // ESP32 Notify -> App
+    const NUS_RX_UUID      = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // Ghi xuống ESP32
+    const NUS_TX_UUID      = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // Notify từ ESP32
 
+    // 15 CHẾ ĐỘ HIỆU ỨNG (KHỚP 100% VỚI FIRMWARE ESP32)
+    const MODES = [
+      { id: 0, name: "Tự động đổi", icon: "🔄", desc: "Auto-Cycle chuyển giao diện tuần hoàn" },
+      { id: 1, name: "Dung nham 3D", icon: "🌋", desc: "Lava Noise 3D chuyển động mượt mà (Mặc định)" },
+      { id: 2, name: "Đèn viền góc", icon: "📐", desc: "Đèn viền 4 cạnh góc hộp tối giản cao cấp" },
+      { id: 3, name: "Sóng nhịp 4 mặt", icon: "🌊", desc: "Sóng nhịp chuyển sắc mượt khi xoay 360°" },
+      { id: 4, name: "Nghiêng & Lắc MPU", icon: "🎯", desc: "Tương tác cảm biến gia tốc bừng sáng" },
+      { id: 5, name: "Vật lý nước MPU", icon: "💧", desc: "Showpiece sóng nước & giọt bắn theo trọng lực" },
+      { id: 6, name: "Nhịp thở ban đêm", icon: "🌙", desc: "Đèn ngủ êm dịu thư thái, không chói mắt" },
+      { id: 7, name: "Cực quang uốn lượn", icon: "🌌", desc: "Dải cực quang huyền ảo sắc tím - cyan" },
+      { id: 8, name: "Dò hướng LED", icon: "🔍", desc: "Calibration test kiểm tra chuỗi LED 0..255" },
+      { id: 9, name: "Tắt đèn / Chờ", icon: "💤", desc: "Standby tiết kiệm pin & màn hình đen" },
+      { id: 10, name: "Màu tĩnh theo App", icon: "🎨", desc: "Đổi màu theo bảng màu RGB tùy chọn" },
+      { id: 11, name: "4 Ô Bitmap tùy biến", icon: "🖼️", desc: "Hiển thị 4 tranh độc lập trên 4 mặt trụ" },
+      { id: 12, name: "Đồng hồ để bàn 360°", icon: "⏰", desc: "Đồng hồ số để bàn & hiển thị thời tiết" },
+      { id: 13, name: "Nhịp đập trái tim", icon: "❤️", desc: "Hiệu ứng trái tim đập bừng sáng lãng mạn" },
+      { id: 14, name: "Sóng tình yêu lan tỏa", icon: "💖", desc: "Vòng sóng tình yêu lãng mạn mộng mơ" }
+    ];
+
+    // 9 MÀU PRESET CHUẨN M3
+    const PRESET_COLORS = [
+      { name: "Cyan Neon", hex: "#00F2FE", r: 0, g: 242, b: 254 },
+      { name: "Pink Cyber", hex: "#FF007F", r: 255, g: 0, b: 127 },
+      { name: "Amber Ấm", hex: "#FF9900", r: 255, g: 153, b: 0 },
+      { name: "Ngọc Lục", hex: "#10B981", r: 16, g: 185, b: 129 },
+      { name: "Tím Đêm", hex: "#8B5CF6", r: 139, g: 92, b: 246 },
+      { name: "Đỏ Tươi", hex: "#EF4444", r: 239, g: 68, b: 68 },
+      { name: "Vàng Nắng", hex: "#FACC15", r: 250, g: 204, b: 21 },
+      { name: "Biển Sâu", hex: "#38BDF8", r: 56, g: 189, b: 248 },
+      { name: "Trắng Ấm", hex: "#FFF7ED", r: 255, g: 247, b: 237 }
+    ];
+
+    // DANH SÁCH APP THÔNG BÁO (CHUẨN M3)
+    const NOTIF_APPS = [
+      { name: "Cuộc gọi đến", icon: "📞", r: 255, g: 20, b: 20, count: 5, enabled: true },
+      { name: "Zalo", icon: "💬", r: 0, g: 140, b: 255, count: 3, enabled: true },
+      { name: "Facebook Messenger", icon: "⚡", r: 180, g: 40, b: 240, count: 3, enabled: true },
+      { name: "Telegram", icon: "✈️", r: 0, g: 210, b: 240, count: 2, enabled: true },
+      { name: "WhatsApp", icon: "🟢", r: 20, g: 240, b: 70, count: 3, enabled: true },
+      { name: "Gmail & Khác", icon: "✉️", r: 255, g: 170, b: 20, count: 2, enabled: true }
+    ];
+
+    // TOẠ ĐỘ CÁC THÀNH PHỐ
+    const CITY_COORDS = {
+      "Hà Nội": { lat: 21.0285, lon: 105.8542 },
+      "TP. Hồ Chí Minh": { lat: 10.8231, lon: 106.6297 },
+      "Đà Nẵng": { lat: 16.0544, lon: 108.2022 },
+      "Hải Phòng": { lat: 20.8449, lon: 106.6881 },
+      "Cần Thơ": { lat: 10.0452, lon: 105.7469 }
+    };
+
+    // BIẾN TOÀN CỤC TRẠNG THÁI
     let bleDevice = null;
     let rxChar = null;
     let txChar = null;
     let isConnected = false;
+
     let currentModeId = 1;
-    let currentColor = { r: 0, g: 242, b: 254 };
+    let currentBrightness = 68;
+    let currentSpeed = 50;
+    let isStandby = false;
+    let currentRgb = { r: 0, g: 242, b: 254 };
+    let marqueeSelectedRgb = { r: 0, g: 242, b: 254 };
 
-    // 10 CHẾ ĐỘ HIỆU ỨNG TINH CHỌN
-    const MODES = [
-      { id: 0, name: "Tự động đổi", icon: "🔄", desc: "Auto-Cycle 5 mode đỉnh cao" },
-      { id: 1, name: "Lava Noise", icon: "🌋", desc: "Dung nham 3D mượt mà (Mặc định)" },
-      { id: 2, name: "Edge Light", icon: "✨", desc: "Đèn viền 4 cạnh góc tối giản" },
-      { id: 3, name: "Face Wave", icon: "🌊", desc: "Sóng nhịp 4 mặt chuyển sắc" },
-      { id: 4, name: "Tilt Glow", icon: "🎯", desc: "Bám góc nghiêng & lắc bừng sáng" },
-      { id: 5, name: "Water Physics", icon: "💧", desc: "Mặt nước dập dềnh & giọt bắn" },
-      { id: 6, name: "Night Breathing", icon: "🌙", desc: "Nhịp thở ban đêm êm dịu" },
-      { id: 7, name: "Aurora Flow", icon: "🌌", desc: "Cực quang uốn lượn tím - cyan" },
-      { id: 8, name: "Dò dây LED", icon: "🔍", desc: "Calibration 0 -> 255" },
-      { id: 9, name: "Tắt đèn", icon: "💤", desc: "Standby ngủ đông" },
+    // PIXEL ART STATES
+    // 4 Slots (Mỗi slot 8x8)
+    const slotBitmaps = [
+      createEmpty8x8(), createEmpty8x8(), createEmpty8x8(), createEmpty8x8()
     ];
+    let selectedSlotIndex = 0;
+    let activeDrawingColor = "#00F2FE";
+    let isEraserActive = false;
+    let isMouseDown = false;
 
-    // BẢNG MÀU PRESET
-    const PRESET_PALETTES = [
-      { hex: "#00F2FE", r: 0, g: 242, b: 254 },
-      { hex: "#FF007F", r: 255, g: 0, b: 127 },
-      { hex: "#FF9900", r: 255, g: 153, b: 0 },
-      { hex: "#10B981", r: 16, g: 185, b: 129 },
-      { hex: "#8B5CF6", r: 139, g: 92, b: 246 },
-      { hex: "#EF4444", r: 239, g: 68, b: 68 },
-      { hex: "#FACC15", r: 250, g: 204, b: 21 },
-      { hex: "#38BDF8", r: 56, g: 189, b: 248 },
-      { hex: "#EC4899", r: 236, g: 72, b: 153 },
-      { hex: "#FFFFFF", r: 255, g: 255, b: 255 }
-    ];
+    // Full Canvas 32x8
+    const fullCanvasPixels = createEmpty32x8();
 
-    // KHỞI TẠO GIAO DIỆN
+    // KHỞI ĐỘNG HỆ THỐNG
     window.addEventListener("DOMContentLoaded", () => {
       renderModes();
-      renderPalettes();
-      initColorWheel();
-      log("Sẵn sàng! Bấm 'Kết nối' để tìm đèn LED-MATRIX-360.");
+      renderSwatches();
+      initPixelStudio();
+      renderNotifApps();
+      loadRoutineSettings();
+      fetchWeatherAuto();
+
+      // Kiểm tra nếu người dùng đang mở trực tiếp file:///
+      if (location.protocol === "file:") {
+        const banner = document.getElementById("fileProtocolBanner");
+        if (banner) banner.style.display = "flex";
+        log("CẢNH BÁO: Mở qua file:// khiến trình duyệt vô hiệu hóa Web Bluetooth. Hãy dùng start_web.bat để chạy qua http://localhost:8080!");
+      }
+
+      // Vòng lặp định kỳ 15 phút đồng bộ thời tiết tự động
+      setInterval(fetchWeatherAuto, 15 * 60 * 1000);
+
+      log("Digital Clone sẵn sàng! Chạm 'Kết nối' để tìm đèn LED-MATRIX-360.");
     });
 
-    function log(msg) {
-      const el = document.getElementById("consoleLog");
+    // CÁC HÀM ĐIỀU KHIỂN MODAL HƯỚNG DẪN BLUETOOTH
+    function showBluetoothHelpModal() {
+      const modal = document.getElementById("bluetoothHelpModal");
+      if (modal) modal.style.display = "flex";
+    }
+
+    function closeBluetoothHelpModal() {
+      const modal = document.getElementById("bluetoothHelpModal");
+      if (modal) modal.style.display = "none";
+    }
+
+    function copyLocalhostUrl() {
+      navigator.clipboard.writeText("http://localhost:8080").then(() => {
+        showToast("Đã chép 'http://localhost:8080'!");
+      }).catch(() => {
+        showToast("http://localhost:8080");
+      });
+    }
+
+    // ========================================================================
+    // 1. TOAST NOTIFICATION VÀ NAVIGATION
+    // ========================================================================
+    function showToast(message, icon = "✓") {
+      const container = document.getElementById("toastContainer");
+      const el = document.createElement("div");
+      el.className = "toast-msg";
+      el.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+      container.appendChild(el);
+      setTimeout(() => {
+        if (el.parentNode) el.parentNode.removeChild(el);
+      }, 3000);
+    }
+
+    function switchMainDestination(destKey, btnEl) {
+      document.querySelectorAll(".screen-panel").forEach(p => p.classList.remove("active"));
+      document.querySelectorAll(".nav-item").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".mobile-nav-btn").forEach(b => b.classList.remove("active"));
+
+      const targetPane = document.getElementById("pane-" + destKey);
+      if (targetPane) targetPane.classList.add("active");
+
+      // Cập nhật active cho sidebar & mobile nav
+      document.querySelectorAll(`.nav-item[onclick*="${destKey}"]`).forEach(b => b.classList.add("active"));
+      document.querySelectorAll(`.mobile-nav-btn[onclick*="${destKey}"]`).forEach(b => b.classList.add("active"));
+    }
+
+    function switchCreativeSubTab(subTabKey, btnEl) {
+      document.querySelectorAll(".creative-sub-pane").forEach(p => p.style.display = "none");
+      document.querySelectorAll(".secondary-tabs .sub-tab-btn").forEach(b => b.classList.remove("active"));
+      document.getElementById("subpane-" + subTabKey).style.display = "block";
+      btnEl.classList.add("active");
+    }
+
+    function log(text) {
+      const term = document.getElementById("systemLogTerminal");
       const time = new Date().toTimeString().split(" ")[0];
-      el.innerHTML += `<div>[${time}] ${msg}</div>`;
-      el.scrollTop = el.scrollHeight;
+      term.innerHTML += `<div>[${time}] ${text}</div>`;
+      term.scrollTop = term.scrollHeight;
     }
 
-    function renderModes() {
-      const container = document.getElementById("modesContainer");
-      container.innerHTML = MODES.map(m => `
-        <div class="mode-card ${m.id === currentModeId ? 'active' : ''}" id="modeCard_${m.id}" onclick="selectMode(${m.id})">
-          <div class="mode-icon">${m.icon}</div>
-          <div class="mode-name">${m.name}</div>
-          <div class="mode-desc">${m.desc}</div>
-        </div>
-      `).join("");
-    }
-
-    function renderPalettes() {
-      const container = document.getElementById("paletteGrid");
-      container.innerHTML = PRESET_PALETTES.map(p => `
-        <div class="palette-dot" style="background:${p.hex};box-shadow:0 0 10px ${p.hex}55" onclick="setPresetColor(${p.r},${p.g},${p.b},'${p.hex}')"></div>
-      `).join("");
-    }
-
-    function switchTab(tabId, btn) {
-      document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
-      document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
-      document.getElementById(tabId).classList.add("active");
-      btn.classList.add("active");
-    }
-
-    // KẾT NỐI BLUETOOTH LE
+    // ========================================================================
+    // 2. GIAO THỨC WEB BLUETOOTH & NORDIC UART
+    // ========================================================================
     async function toggleBleConnection() {
       if (isConnected) {
         if (bleDevice && bleDevice.gatt.connected) {
@@ -833,19 +1950,41 @@
       }
 
       if (!navigator.bluetooth) {
-        alert("Trình duyệt này chưa hỗ trợ Web Bluetooth! Hãy mở bằng Google Chrome trên Android hoặc máy tính.");
+        showBluetoothHelpModal();
+        return;
+      }
+
+      if (location.protocol === "file:") {
+        showBluetoothHelpModal();
         return;
       }
 
       try {
         log("Đang quét tìm thiết bị 'LED-MATRIX-360'...");
-        bleDevice = await navigator.bluetooth.requestDevice({
-          filters: [{ name: "LED-MATRIX-360" }],
-          optionalServices: [NUS_SERVICE_UUID]
-        });
+        try {
+          bleDevice = await navigator.bluetooth.requestDevice({
+            filters: [
+              { name: "LED-MATRIX-360" },
+              { name: "LED-360" },
+              { namePrefix: "LED" },
+              { services: [NUS_SERVICE_UUID] }
+            ],
+            optionalServices: [NUS_SERVICE_UUID]
+          });
+        } catch (filterErr) {
+          if (filterErr.name === 'NotFoundError' && filterErr.message && filterErr.message.toLowerCase().includes('user cancelled')) {
+            throw filterErr;
+          }
+          // Fallback nếu trình duyệt lọc gắt gao
+          log("Đang mở quét toàn bộ thiết bị BLE lân cận...");
+          bleDevice = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,
+            optionalServices: [NUS_SERVICE_UUID]
+          });
+        }
 
         bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
-        log("Đang kết nối GATT Server...");
+        log("Đang kết nối GATT Server tới " + (bleDevice.name || "Thiết bị"));
 
         const server = await bleDevice.gatt.connect();
         const service = await server.getPrimaryService(NUS_SERVICE_UUID);
@@ -857,10 +1996,26 @@
         txChar.addEventListener('characteristicvaluechanged', onTelemetryReceived);
 
         isConnected = true;
-        updateConnectionUI(true);
-        log("KẾT NỐI THÀNH CÔNG tới " + bleDevice.name);
+        updateConnectionUI(true, bleDevice.name || "LED-MATRIX-360");
+        showToast("Đã kết nối thành công tới " + (bleDevice.name || "Đèn") + "!");
+        log("KẾT NỐI THÀNH CÔNG!");
+
+        // Tự động đồng bộ Giờ hệ thống (Frame 0x05) và Thời tiết (Frame 0x04) ngay khi vừa kết nối
+        syncSystemTimeNow();
+        fetchWeatherAuto();
       } catch (err) {
         log("Lỗi kết nối: " + err.message);
+        if (err.name === 'NotFoundError' || (err.message && err.message.toLowerCase().includes('user cancelled'))) {
+          showToast("Đã hủy chọn thiết bị Bluetooth.", "ℹ");
+          return;
+        }
+
+        if (err.message && (err.message.includes("globally disabled") || err.message.includes("not supported") || location.protocol === "file:")) {
+          showBluetoothHelpModal();
+          return;
+        }
+
+        showToast("Không thể kết nối: " + err.message, "✕");
       }
     }
 
@@ -868,214 +2023,821 @@
       isConnected = false;
       updateConnectionUI(false);
       log("Đã ngắt kết nối Bluetooth.");
+      showToast("Đã ngắt kết nối với đèn.", "ℹ");
     }
 
-    function updateConnectionUI(connected) {
-      const btn = document.getElementById("btnConnect");
-      const label = document.getElementById("connectLabel");
+    function updateConnectionUI(connected, devName = "--") {
+      const sDot = document.getElementById("sidebarPulseDot");
+      const sTxt = document.getElementById("sidebarBleText");
+      const sBtn = document.getElementById("btnConnectSidebar");
+      const sLbl = document.getElementById("sidebarConnectBtnLabel");
+      const sDev = document.getElementById("sidebarDeviceName");
+
+      const mDot = document.getElementById("mobilePulseDot");
+      const mLbl = document.getElementById("mobileConnectLabel");
+      const mBtn = document.getElementById("mobileConnectBtn");
+
       if (connected) {
-        btn.classList.add("connected");
-        label.innerText = "Đã kết nối";
+        sDot.classList.add("connected");
+        sTxt.innerText = "Đã kết nối";
+        sBtn.classList.add("connected");
+        sLbl.innerText = "Ngắt kết nối";
+        sDev.innerText = devName;
+
+        mDot.classList.add("connected");
+        mLbl.innerText = "Đã kết nối";
+        mBtn.classList.add("active");
       } else {
-        btn.classList.remove("connected");
-        label.innerText = "Kết nối";
+        sDot.classList.remove("connected");
+        sTxt.innerText = "Chưa kết nối";
+        sBtn.classList.remove("connected");
+        sLbl.innerText = "Kết nối Bluetooth";
+        sDev.innerText = "--";
+
+        mDot.classList.remove("connected");
+        mLbl.innerText = "Kết nối";
+        mBtn.classList.remove("active");
       }
     }
 
-    // GỬI LỆNH XUỐNG ESP32
+    // GỬI LỆNH DẠNG TEXT (VD: bright 100, mode 2)
     async function sendCommand(cmdStr) {
-      if (!rxChar || !isConnected) {
-        log("Chưa kết nối Bluetooth! Đang mô phỏng lệnh: " + cmdStr);
+      if (!isConnected || !rxChar) {
+        log("[Ngoại tuyến] Mô phỏng lệnh: " + cmdStr);
         return;
       }
       try {
         const encoder = new TextEncoder();
         const data = encoder.encode(cmdStr + "\n");
         await rxChar.writeValueWithoutResponse(data);
-        log("Đã gửi: " + cmdStr);
+        log("-> Gửi: " + cmdStr);
       } catch (e) {
-        log("Lỗi gửi dữ liệu: " + e.message);
+        log("Lỗi gửi lệnh: " + e.message);
       }
     }
 
-    // NHẬN TELEMETRY JSON TỪ ESP32
+    // GỬI GÓI TIN NHỊ PHÂN (BINARY GATT FRAMES 0x01..0x06)
+    async function sendBytes(byteArray) {
+      if (!isConnected || !rxChar) {
+        log("[Ngoại tuyến] Gửi binary frame (" + byteArray.length + " bytes)");
+        return;
+      }
+      try {
+        await rxChar.writeValueWithoutResponse(byteArray);
+        log("-> Gửi Binary Frame Opcode 0x" + byteArray[0].toString(16).padStart(2, '0').toUpperCase() + " (" + byteArray.length + " bytes)");
+      } catch (e) {
+        log("Lỗi gửi binary: " + e.message);
+      }
+    }
+
+    // XỬ LÝ TELEMETRY TỪ ESP32 QUA NOTIFY
     function onTelemetryReceived(event) {
       const decoder = new TextDecoder();
       const raw = decoder.decode(event.target.value);
       try {
         const d = JSON.parse(raw);
-        // Cập nhật Mode
+        // Mode
         if (d.m !== undefined) {
           currentModeId = d.m;
-          document.querySelectorAll(".mode-card").forEach(c => c.classList.remove("active"));
-          const activeCard = document.getElementById("modeCard_" + d.m);
-          if (activeCard) activeCard.classList.add("active");
-          document.getElementById("statMode").innerText = d.mn || `Mode ${d.m}`;
+          updateModeHighlight(d.m);
+          isStandby = (d.m === 9);
+          updatePowerUi(isStandby);
         }
-        // Cập nhật độ sáng
+        // Độ sáng
         if (d.b !== undefined) {
-          document.getElementById("brightSlider").value = d.b;
-          document.getElementById("brightVal").innerText = `${d.b} / 255`;
+          currentBrightness = d.b;
+          document.getElementById("sliderBrightness").value = d.b;
+          document.getElementById("brightnessDescLabel").innerText = `Độ sáng: ${d.b}/255 (${Math.round(d.b * 100 / 255)}%)`;
         }
-        // Cập nhật nguồn & Pin
+        // Nguồn pin
         if (d.pwr !== undefined) {
-          const pwrEl = document.getElementById("statPower");
-          if (d.pwr === 1) {
-            pwrEl.innerHTML = `<span style="color:var(--amber)">⚡ ĐANG SẠC</span>`;
-          } else if (d.pwr === 2) {
-            pwrEl.innerHTML = `<span style="color:var(--green)">✓ PIN ĐẦY 100%</span>`;
-          } else {
-            pwrEl.innerHTML = `<span>🔋 DÙNG PIN</span>`;
-          }
+          const pwrLabel = document.getElementById("telemetryPwrState");
+          if (d.pwr === 1) pwrLabel.innerHTML = `<span style="color:var(--amber-warm)">⚡ ĐANG SẠC</span>`;
+          else if (d.pwr === 2) pwrLabel.innerHTML = `<span style="color:var(--green-jade)">✓ PIN ĐẦY</span>`;
+          else pwrLabel.innerHTML = `<span>DÙNG PIN</span>`;
         }
-        // Cập nhật điện áp
         if (d.stat !== undefined) {
-          document.getElementById("statVolt").innerText = `${d.stat} mV`;
+          document.getElementById("telemetryStatMv").innerText = d.stat + " mV";
         }
-        // Cập nhật con quay MPU
+        // MPU-6050
         if (d.pitch !== undefined && d.roll !== undefined) {
-          document.getElementById("valPitch").innerText = `${d.pitch.toFixed(1)}°`;
-          document.getElementById("valRoll").innerText = `${d.roll.toFixed(1)}°`;
-          const bubble = document.getElementById("tiltIndicator");
-          const px = Math.max(-50, Math.min(50, d.roll * 1.5));
-          const py = Math.max(-50, Math.min(50, -d.pitch * 1.5));
-          bubble.style.transform = `translate(${px}px, ${py}px)`;
+          document.getElementById("telemetryMpuText").innerText = `${d.pitch.toFixed(1)}° / ${d.roll.toFixed(1)}°`;
+          document.getElementById("mpuAngleDescText").innerText = `Pitch: ${d.pitch.toFixed(1)}° | Roll: ${d.roll.toFixed(1)}°`;
+          const ball = document.getElementById("gravityBall");
+          const px = Math.max(-65, Math.min(65, d.roll * 1.8));
+          const py = Math.max(-65, Math.min(65, -d.pitch * 1.8));
+          ball.style.transform = `translate(${px}px, ${py}px)`;
         }
-      } catch (err) {
-        log("Data: " + raw);
+        // Heap
+        if (d.heap !== undefined) {
+          document.getElementById("telemetryHeapText").innerText = Math.round(d.heap / 1024) + " KB";
+        }
+      } catch (e) {
+        log("UART: " + raw);
       }
     }
 
-    // CÁC HÀM ĐIỀU KHIỂN
+    // ========================================================================
+    // 3. HIỆU ỨNG & ĐỘ SÁNG (MƯỢT 120HZ KHÔNG KHỰNG)
+    // ========================================================================
+    function renderModes() {
+      const container = document.getElementById("modesContainer");
+      container.innerHTML = MODES.map(m => `
+        <div class="mode-card ${m.id === currentModeId ? 'active' : ''}" id="modeCard_${m.id}" onclick="selectMode(${m.id})">
+          <div class="mode-top">
+            <div class="mode-icon-circle">${m.icon}</div>
+            <div class="mode-check-badge">
+              <svg style="width:20px;height:20px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            </div>
+          </div>
+          <div class="mode-info">
+            <h3>${m.name}</h3>
+            <p>${m.desc}</p>
+          </div>
+        </div>
+      `).join("");
+    }
+
     function selectMode(modeId) {
       currentModeId = modeId;
+      isStandby = (modeId === 9);
+      updateModeHighlight(modeId);
+      updatePowerUi(isStandby);
+
+      // Frame 0x02: [0x02, Effect_ID, Speed, Brightness, Palette_ID]
+      sendBytes(new Uint8Array([0x02, modeId, currentSpeed, currentBrightness, 0]));
+
+      const m = MODES.find(x => x.id === modeId);
+      showToast(`Đã chọn: ${m ? m.name : 'Mode ' + modeId}`);
+    }
+
+    function updateModeHighlight(modeId) {
       document.querySelectorAll(".mode-card").forEach(c => c.classList.remove("active"));
       const card = document.getElementById("modeCard_" + modeId);
       if (card) card.classList.add("active");
-      sendCommand(`mode ${modeId}`);
     }
 
-    let brightDebounce = null;
-    function onBrightChange(val) {
-      document.getElementById("brightVal").innerText = `${val} / 255`;
-      clearTimeout(brightDebounce);
-      brightDebounce = setTimeout(() => {
-        sendCommand(`bright ${val}`);
-      }, 80);
-    }
-
-    function togglePower() {
-      const btn = document.getElementById("btnPower");
-      if (btn.classList.contains("on")) {
+    function updatePowerUi(standby) {
+      const btn = document.getElementById("btnPowerHero");
+      const title = document.getElementById("powerStateTitle");
+      if (standby) {
         btn.classList.remove("on");
-        selectMode(9); // Tắt đèn (Standby)
+        title.innerText = "Đèn đang chờ (Standby)";
       } else {
         btn.classList.add("on");
-        selectMode(1); // Bật về Mode 1
+        title.innerText = "Ánh sáng chủ động";
       }
     }
 
-    function sendMarqueeText() {
-      const text = document.getElementById("marqueeText").value.trim();
-      const colHex = document.getElementById("textColorPicker").value;
-      const rgb = hexToRgb(colHex);
-      if (!text) return;
-      sendCommand(`text ${rgb.r} ${rgb.g} ${rgb.b} ${text}`);
+    function togglePowerState() {
+      if (isStandby) {
+        selectMode(1); // Bật về Mode 1 Lửa cuộn 360°
+      } else {
+        selectMode(9); // Chuyển sang Mode 9 (Standby)
+      }
     }
 
-    function quickSend(str) {
-      document.getElementById("marqueeText").value = str;
-      sendMarqueeText();
+    // THROTTLE KÉO ĐỘ SÁNG MƯỢT 120HZ
+    let lastBrightSendTime = 0;
+    function onBrightnessDrag(val) {
+      currentBrightness = parseInt(val);
+      document.getElementById("brightnessDescLabel").innerText = `Độ sáng: ${val}/255 (${Math.round(val * 100 / 255)}%)`;
+      const now = Date.now();
+      if (now - lastBrightSendTime > 100) {
+        lastBrightSendTime = now;
+        sendCommand(`bright ${val}`);
+      }
     }
 
-    function setPresetColor(r, g, b, hex) {
-      currentColor = { r, g, b };
-      document.getElementById("colorSwatch").style.background = hex;
-      document.getElementById("colorHex").innerText = hex.toUpperCase();
-      document.getElementById("colorRgb").innerText = `RGB(${r}, ${g}, ${b})`;
-      sendCommand(`color ${r} ${g} ${b}`);
+    function onBrightnessCommit(val) {
+      currentBrightness = parseInt(val);
+      sendCommand(`bright ${val}`);
+    }
+
+    function setQuickBrightness(val, label) {
+      currentBrightness = val;
+      document.getElementById("sliderBrightness").value = val;
+      document.getElementById("brightnessDescLabel").innerText = `Độ sáng: ${val}/255 (${label})`;
+      sendCommand(`bright ${val}`);
+      showToast(`Độ sáng: ${label}`);
+    }
+
+    function onSpeedChange(val) {
+      currentSpeed = parseInt(val);
+      document.getElementById("speedValueLabel").innerText = val + "%";
+      // Frame 0x02 cập nhật tốc độ
+      sendBytes(new Uint8Array([0x02, currentModeId, currentSpeed, currentBrightness, 0]));
+    }
+
+    // ========================================================================
+    // 4. SÁNG TẠO: MÀU TĨNH & MARQUEE
+    // ========================================================================
+    function renderSwatches() {
+      const container = document.getElementById("swatchesContainer");
+      container.innerHTML = PRESET_COLORS.map(c => `
+        <div class="swatch-card" style="background:${c.hex};color:${(c.r*0.299 + c.g*0.587 + c.b*0.114) > 140 ? '#000' : '#fff'}" onclick="setCustomRgbColor(${c.r}, ${c.g}, ${c.b}, '${c.hex}')">
+          ${c.name}
+        </div>
+      `).join("");
+    }
+
+    function setCustomRgbColor(r, g, b, hex) {
+      currentRgb = { r, g, b };
+      document.getElementById("colorHeroPreview").style.background = hex;
+      document.getElementById("colorHeroCode").innerText = `RGB(${r}, ${g}, ${b})`;
+
+      // Frame 0x01: [0x01, R, G, B, Brightness]
+      sendBytes(new Uint8Array([0x01, r, g, b, currentBrightness]));
+      updateModeHighlight(10);
+      showToast(`Màu tĩnh: RGB(${r}, ${g}, ${b})`);
+    }
+
+    function onHueSliderChange(hue) {
+      document.getElementById("hueAngleLabel").innerText = hue + "°";
+      const rgb = hslToRgb(hue / 360, 1.0, 0.5);
+      const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+      document.getElementById("colorHeroPreview").style.background = hex;
+      document.getElementById("colorHeroCode").innerText = `RGB(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+      currentRgb = rgb;
+      sendBytes(new Uint8Array([0x01, rgb.r, rgb.g, rgb.b, currentBrightness]));
     }
 
     function applyCurrentColor() {
-      sendCommand(`color ${currentColor.r} ${currentColor.g} ${currentColor.b}`);
+      sendBytes(new Uint8Array([0x01, currentRgb.r, currentRgb.g, currentRgb.b, currentBrightness]));
+      showToast(`Đã áp dụng màu RGB(${currentRgb.r}, ${currentRgb.g}, ${currentRgb.b})`);
     }
 
-    function hexToRgb(hex) {
-      const bigint = parseInt(hex.replace("#", ""), 16);
-      return {
-        r: (bigint >> 16) & 255,
-        g: (bigint >> 8) & 255,
-        b: bigint & 255
-      };
+    function setMarqueeColor(r, g, b, btnEl) {
+      marqueeSelectedRgb = { r, g, b };
+      document.querySelectorAll("#marqueeColorChips .filter-chip").forEach(c => c.classList.remove("active"));
+      btnEl.classList.add("active");
     }
 
-    // BÁNH XE MÀU CANVAS HSV (Tối ưu hóa: 1ms qua ImageData thay vì 57,600 draw calls)
-    function initColorWheel() {
-      const canvas = document.getElementById("colorCanvas");
-      const ctx = canvas.getContext("2d");
-      const width = canvas.width;
-      const height = canvas.height;
-      const radius = width / 2;
+    function sendMarqueeText() {
+      const txt = document.getElementById("marqueeTextInput").value.trim();
+      if (!txt) return;
+      const { r, g, b } = marqueeSelectedRgb;
+      sendCommand(`text ${r} ${g} ${b} ${txt}`);
+      showToast(`Đã bắn chữ lên đèn: "${txt}"`);
+    }
 
-      const imgData = ctx.createImageData(width, height);
-      const data = imgData.data;
+    function setQuickMarquee(txt) {
+      document.getElementById("marqueeTextInput").value = txt;
+      sendMarqueeText();
+    }
 
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          const dx = x - radius;
-          const dy = y - radius;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const index = (y * width + x) * 4;
+    // ========================================================================
+    // 5. PIXEL ART STUDIO: 4 MẶT & 32X8 TOÀN CẢNH
+    // ========================================================================
+    function createEmpty8x8() {
+      return Array.from({ length: 8 }, () => Array(8).fill("#000000"));
+    }
 
-          if (dist <= radius) {
-            let angle = Math.atan2(dy, dx) * 180 / Math.PI;
-            if (angle < 0) angle += 360;
-            const sat = Math.min(1, dist / radius);
+    function createEmpty32x8() {
+      return Array.from({ length: 8 }, () => Array(32).fill("#000000"));
+    }
 
-            // Chuyển HSL sang RGB nhanh
-            const c = sat;
-            const hPrime = angle / 60;
-            const xVal = c * (1 - Math.abs((hPrime % 2) - 1));
-            let r1 = 0, g1 = 0, b1 = 0;
-            if (hPrime < 1) { r1 = c; g1 = xVal; }
-            else if (hPrime < 2) { r1 = xVal; g1 = c; }
-            else if (hPrime < 3) { g1 = c; b1 = xVal; }
-            else if (hPrime < 4) { g1 = xVal; b1 = c; }
-            else if (hPrime < 5) { r1 = xVal; b1 = c; }
-            else { r1 = c; b1 = xVal; }
+    const PALETTE_COLORS = ["#00F2FE", "#EF4444", "#10B981", "#FACC15", "#EC4899", "#FFFFFF", "#38BDF8", "#FF9900"];
 
-            const m = 0.5 - c * 0.5;
-            data[index]     = Math.round((r1 + m) * 255);
-            data[index + 1] = Math.round((g1 + m) * 255);
-            data[index + 2] = Math.round((b1 + m) * 255);
-            data[index + 3] = 255;
-          } else {
-            data[index + 3] = 0; // Trong suốt ngoài vòng tròn
+    function initPixelStudio() {
+      // Palette circles
+      const p1 = document.getElementById("pixelColorPalette");
+      const p2 = document.getElementById("pixelColorPaletteFull");
+      const html = PALETTE_COLORS.map((c, i) => `
+        <div class="palette-circle ${i === 0 ? 'active' : ''}" style="background:${c};" onclick="setDrawingColor('${c}', this)"></div>
+      `).join("");
+      p1.innerHTML = html;
+      p2.innerHTML = html;
+
+      // Render 8x8 Grid
+      const grid8 = document.getElementById("grid8x8");
+      grid8.innerHTML = "";
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          const cell = document.createElement("div");
+          cell.className = "pixel-cell";
+          cell.id = `cell_8x8_${x}_${y}`;
+          cell.onmousedown = () => paintPixel8x8(x, y);
+          cell.onmouseenter = (e) => { if (e.buttons === 1) paintPixel8x8(x, y); };
+          grid8.appendChild(cell);
+        }
+      }
+
+      // Render 32x8 Grid
+      const grid32 = document.getElementById("grid32x8");
+      grid32.innerHTML = "";
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 32; x++) {
+          const cell = document.createElement("div");
+          cell.className = "pixel-cell";
+          cell.id = `cell_32x8_${x}_${y}`;
+          if (x > 0 && x % 8 === 0) {
+            cell.style.marginLeft = "6px";
+          }
+          cell.onmousedown = () => paintPixel32x8(x, y);
+          cell.onmouseenter = (e) => { if (e.buttons === 1) paintPixel32x8(x, y); };
+          grid32.appendChild(cell);
+        }
+      }
+
+      // 8x8 Presets
+      const presetGroup = document.getElementById("slotPresetsChipGroup");
+      const slotPresets = [
+        { name: "Trái Tim", rows: [0x00, 0x66, 0xFF, 0xFF, 0xFF, 0x7E, 0x3C, 0x18], color: "#EF4444" },
+        { name: "Mặt Cười", rows: [0x3C, 0x42, 0xA5, 0x81, 0xA5, 0x99, 0x42, 0x3C], color: "#FACC15" },
+        { name: "Ngôi Sao", rows: [0x18, 0x18, 0xFF, 0x7E, 0x3C, 0x66, 0xC3, 0x00], color: "#FF9900" },
+        { name: "Sấm Sét", rows: [0x0C, 0x18, 0x30, 0x7E, 0x0C, 0x18, 0x20, 0x40], color: "#FACC15" },
+        { name: "Lửa", rows: [0x10, 0x30, 0x78, 0x7C, 0xFE, 0xFE, 0x7C, 0x38], color: "#FF5500" },
+        { name: "Pacman", rows: [0x3C, 0x7E, 0xFF, 0xF8, 0xF0, 0xF8, 0x7E, 0x3C], color: "#FACC15" }
+      ];
+      presetGroup.innerHTML = slotPresets.map(p => `
+        <button class="filter-chip" onclick="apply8x8Preset(${JSON.stringify(p.rows)}, '${p.color}')">${p.name}</button>
+      `).join("");
+
+      // 32x8 Presets
+      const fullGroup = document.getElementById("fullCanvasPresetsGroup");
+      fullGroup.innerHTML = `
+        <button class="filter-chip" onclick="applyFullPreset('equalizer')">🎵 Sóng Âm Equalizer</button>
+        <button class="filter-chip" onclick="applyFullPreset('stars')">✨ Vũ Trụ Sao Băng</button>
+        <button class="filter-chip" onclick="applyFullPreset('rainbow')">🌈 Cầu Vồng 360°</button>
+        <button class="filter-chip" onclick="applyFullPreset('ecg')">💓 Nhịp Tim ECG</button>
+      `;
+
+      // Nạp mẫu mặc định ban đầu cho 4 slots
+      apply8x8Preset([0x00, 0x66, 0xFF, 0xFF, 0xFF, 0x7E, 0x3C, 0x18], "#EF4444"); // Slot 1 Trái tim
+      update8x8GridDisplay();
+      drawPreviewStrip();
+    }
+
+    function setDrawingColor(col, el) {
+      activeDrawingColor = col;
+      isEraserActive = false;
+      document.querySelectorAll(".palette-circle").forEach(p => p.classList.remove("active"));
+      if (el) el.classList.add("active");
+      document.getElementById("btnEraser").classList.remove("active");
+      document.getElementById("btnEraserFull").classList.remove("active");
+    }
+
+    function toggleEraser() {
+      isEraserActive = !isEraserActive;
+      document.getElementById("btnEraser").classList.toggle("active", isEraserActive);
+      document.getElementById("btnEraserFull").classList.toggle("active", isEraserActive);
+    }
+
+    function paintPixel8x8(x, y) {
+      const col = isEraserActive ? "#000000" : activeDrawingColor;
+      slotBitmaps[selectedSlotIndex][y][x] = col;
+      const cell = document.getElementById(`cell_8x8_${x}_${y}`);
+      if (cell) cell.style.background = col === "#000000" ? "#1e2633" : col;
+      drawPreviewStrip();
+    }
+
+    function paintPixel32x8(x, y) {
+      const col = isEraserActive ? "#000000" : activeDrawingColor;
+      fullCanvasPixels[y][x] = col;
+      const cell = document.getElementById(`cell_32x8_${x}_${y}`);
+      if (cell) cell.style.background = col === "#000000" ? "#1e2633" : col;
+    }
+
+    function selectSlot(slotIdx) {
+      selectedSlotIndex = slotIdx;
+      for (let i = 0; i < 4; i++) {
+        document.getElementById(`chipSlot${i + 1}`).classList.toggle("active", i === slotIdx);
+      }
+      update8x8GridDisplay();
+    }
+
+    function update8x8GridDisplay() {
+      const current = slotBitmaps[selectedSlotIndex];
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          const col = current[y][x];
+          const cell = document.getElementById(`cell_8x8_${x}_${y}`);
+          if (cell) cell.style.background = (col === "#000000" || !col) ? "#1e2633" : col;
+        }
+      }
+    }
+
+    function clearCurrentSlot() {
+      slotBitmaps[selectedSlotIndex] = createEmpty8x8();
+      update8x8GridDisplay();
+      drawPreviewStrip();
+    }
+
+    function fillCurrentSlot() {
+      const col = isEraserActive ? "#000000" : activeDrawingColor;
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          slotBitmaps[selectedSlotIndex][y][x] = col;
+        }
+      }
+      update8x8GridDisplay();
+      drawPreviewStrip();
+    }
+
+    function clearFullCanvas() {
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 32; x++) {
+          fullCanvasPixels[y][x] = "#000000";
+          const cell = document.getElementById(`cell_32x8_${x}_${y}`);
+          if (cell) cell.style.background = "#1e2633";
+        }
+      }
+    }
+
+    function apply8x8Preset(rows, col) {
+      for (let y = 0; y < 8; y++) {
+        const rowVal = rows[y];
+        for (let x = 0; x < 8; x++) {
+          const on = ((rowVal >> (7 - x)) & 1) === 1;
+          slotBitmaps[selectedSlotIndex][y][x] = on ? col : "#000000";
+        }
+      }
+      update8x8GridDisplay();
+      drawPreviewStrip();
+    }
+
+    function applyFullPreset(type) {
+      clearFullCanvas();
+      if (type === 'equalizer') {
+        const heights = [2, 4, 6, 8, 7, 5, 3, 2, 4, 6, 7, 8, 5, 3, 2, 4, 6, 8, 7, 5, 3, 2, 5, 7, 8, 6, 4, 2, 3, 5, 7, 4];
+        for (let x = 0; x < 32; x++) {
+          const h = heights[x];
+          for (let y = 8 - h; y < 8; y++) {
+            const c = y < 2 ? "#EF4444" : (y < 5 ? "#FACC15" : "#00F2FE");
+            fullCanvasPixels[y][x] = c;
+            document.getElementById(`cell_32x8_${x}_${y}`).style.background = c;
           }
         }
-      }
-      ctx.putImageData(imgData, 0, 0);
-
-      function pickColor(e) {
-        const rect = canvas.getBoundingClientRect();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        const x = Math.floor((clientX - rect.left) * (canvas.width / rect.width));
-        const y = Math.floor((clientY - rect.top) * (canvas.height / rect.height));
-
-        const pixel = ctx.getImageData(x, y, 1, 1).data;
-        if (pixel[3] > 0) {
-          currentColor = { r: pixel[0], g: pixel[1], b: pixel[2] };
-          const hex = `#${((1 << 24) + (pixel[0] << 16) + (pixel[1] << 8) + pixel[2]).toString(16).slice(1)}`;
-          document.getElementById("colorSwatch").style.background = hex;
-          document.getElementById("colorHex").innerText = hex.toUpperCase();
-          document.getElementById("colorRgb").innerText = `RGB(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`;
-          document.getElementById("textColorPicker").value = hex;
+      } else if (type === 'rainbow') {
+        for (let x = 0; x < 32; x++) {
+          const rgb = hslToRgb(x / 32, 1.0, 0.5);
+          const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+          for (let y = 1; y < 7; y++) {
+            fullCanvasPixels[y][x] = hex;
+            document.getElementById(`cell_32x8_${x}_${y}`).style.background = hex;
+          }
+        }
+      } else if (type === 'ecg') {
+        for (let x = 0; x < 32; x++) {
+          const y = (x % 8 === 2) ? 3 : ((x % 8 === 3) ? 1 : ((x % 8 === 4) ? 6 : ((x % 8 === 5) ? 2 : 4)));
+          fullCanvasPixels[y][x] = "#EF4444";
+          document.getElementById(`cell_32x8_${x}_${y}`).style.background = "#EF4444";
         }
       }
+    }
 
-      canvas.addEventListener("click", pickColor);
-      canvas.addEventListener("touchmove", (e) => { e.preventDefault(); pickColor(e); });
+    function drawPreviewStrip() {
+      const cvs = document.getElementById("slotPreviewCanvas");
+      const ctx = cvs.getContext("2d");
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, cvs.width, cvs.height);
+
+      for (let slot = 0; slot < 4; slot++) {
+        const startX = slot * 64;
+        const cur = slotBitmaps[slot];
+        for (let y = 0; y < 8; y++) {
+          for (let x = 0; x < 8; x++) {
+            const col = cur[y][x];
+            if (col && col !== "#000000") {
+              ctx.fillStyle = col;
+              ctx.fillRect(startX + x * 8, y * 8, 7, 7);
+            }
+          }
+        }
+        if (slot < 3) {
+          ctx.strokeStyle = "rgba(255,255,255,0.2)";
+          ctx.strokeRect(startX + 63.5, 0, 1, 64);
+        }
+      }
+    }
+
+    function toggleCanvasMode(mode) {
+      const is4 = (mode === '4slots');
+      document.getElementById("canvasView4Slots").style.display = is4 ? "block" : "none";
+      document.getElementById("canvasViewFull32x8").style.display = is4 ? "none" : "block";
+      document.getElementById("btnMode4Slots").classList.toggle("active", is4);
+      document.getElementById("btnModeFull32x8").classList.toggle("active", !is4);
+    }
+
+    // GỬI BITMAP 8X8 QUA FRAME 0x06
+    function sendCurrentSlot() {
+      const slotNum = selectedSlotIndex + 1;
+      const data = encodeSlotToFrame06(slotNum, slotBitmaps[selectedSlotIndex]);
+      sendBytes(data);
+      showToast(`Đã gửi Mặt ${slotNum} lên đèn`);
+    }
+
+    async function sendAllFourSlots() {
+      for (let i = 0; i < 4; i++) {
+        const data = encodeSlotToFrame06(i + 1, slotBitmaps[i]);
+        sendBytes(data);
+        await new Promise(r => setTimeout(r, 40));
+      }
+      await new Promise(r => setTimeout(r, 60));
+      selectMode(11); // Bật Mode 11 (4 Ô Bitmap)
+      showToast("Đã gửi cả 4 Mặt và kích hoạt Mode 11!");
+    }
+
+    async function sendFullCanvasToLamp() {
+      // Chia 32x8 thành 4 ô 8x8 rồi gửi Frame 0x06 lần lượt
+      for (let slot = 0; slot < 4; slot++) {
+        const slotData = createEmpty8x8();
+        for (let y = 0; y < 8; y++) {
+          for (let x = 0; x < 8; x++) {
+            slotData[y][x] = fullCanvasPixels[y][slot * 8 + x];
+          }
+        }
+        const frame = encodeSlotToFrame06(slot + 1, slotData);
+        sendBytes(frame);
+        await new Promise(r => setTimeout(r, 40));
+      }
+      await new Promise(r => setTimeout(r, 60));
+      selectMode(11);
+      showToast("Đã gửi toàn bộ Canvas 32x8 lên đèn!");
+    }
+
+    function encodeSlotToFrame06(slotNum, grid8) {
+      // Trích màu nổi bật nhất & 8 hàng 1-bit
+      let sumR = 0, sumG = 0, sumB = 0, count = 0;
+      const rows = new Uint8Array(8);
+
+      for (let y = 0; y < 8; y++) {
+        let rowVal = 0;
+        for (let x = 0; x < 8; x++) {
+          const col = grid8[y][x];
+          if (col && col !== "#000000") {
+            rowVal |= (1 << (7 - x));
+            const rgb = hexToRgb(col);
+            sumR += rgb.r; sumG += rgb.g; sumB += rgb.b;
+            count++;
+          }
+        }
+        rows[y] = rowVal;
+      }
+
+      const r = count > 0 ? Math.round(sumR / count) : 0;
+      const g = count > 0 ? Math.round(sumG / count) : 242;
+      const b = count > 0 ? Math.round(sumB / count) : 254;
+
+      // Frame 0x06: [0x06, Slot, R, G, B, Row0..Row7] (13 bytes)
+      const packet = new Uint8Array(13);
+      packet[0] = 0x06;
+      packet[1] = slotNum;
+      packet[2] = r;
+      packet[3] = g;
+      packet[4] = b;
+      packet.set(rows, 5);
+      return packet;
+    }
+
+    // ========================================================================
+    // 6. KỊCH BẢN: BÌNH MINH, ĐÈN NGỦ & THỜI TIẾT TỰ ĐỘNG
+    // ========================================================================
+    function loadRoutineSettings() {
+      try {
+        const saved = JSON.parse(localStorage.getItem("smartRoutines") || "{}");
+        if (saved.sunriseEnabled !== undefined) document.getElementById("switchSunrise").checked = saved.sunriseEnabled;
+        if (saved.bedtimeEnabled !== undefined) document.getElementById("switchBedtime").checked = saved.bedtimeEnabled;
+        if (saved.autoWeather !== undefined) document.getElementById("switchAutoWeather").checked = saved.autoWeather;
+        if (saved.city) document.getElementById("citySelect").value = saved.city;
+      } catch (e) {}
+    }
+
+    function saveRoutineSettings() {
+      const cfg = {
+        sunriseEnabled: document.getElementById("switchSunrise").checked,
+        bedtimeEnabled: document.getElementById("switchBedtime").checked,
+        autoWeather: document.getElementById("switchAutoWeather").checked,
+        city: document.getElementById("citySelect").value
+      };
+      localStorage.setItem("smartRoutines", JSON.stringify(cfg));
+      showToast("Đã lưu cài đặt kịch bản");
+    }
+
+    function setBedtimeDuration(mins, btnEl) {
+      document.querySelectorAll("#bedtimeDurationChips .filter-chip").forEach(b => b.classList.remove("active"));
+      btnEl.classList.add("active");
+    }
+
+    async function runSunriseDemo() {
+      showToast("Bắt đầu chạy thử Bình minh (Demo 10s)...");
+      sendBytes(new Uint8Array([0x01, 140, 25, 0, 8])); // Đỏ cam dịu
+      await new Promise(r => setTimeout(r, 2000));
+      sendBytes(new Uint8Array([0x01, 210, 60, 5, 25]));
+      await new Promise(r => setTimeout(r, 2000));
+      sendBytes(new Uint8Array([0x01, 255, 120, 15, 50]));
+      await new Promise(r => setTimeout(r, 2000));
+      sendBytes(new Uint8Array([0x01, 255, 190, 40, 75])); // Vàng sáng
+      await new Promise(r => setTimeout(r, 2000));
+      selectMode(12); // Mode 12 Đồng hồ 360°
+      showToast("Hoàn tất kịch bản bình minh thức dậy!");
+    }
+
+    function activateBedtimeRoutine() {
+      selectMode(6); // Mode 6 Night Breathing
+      sendCommand("bright 10");
+      showToast("Đã kích hoạt Đèn ngủ ban đêm (Tự tắt)");
+    }
+
+    function onCitySelected(city) {
+      saveRoutineSettings();
+      fetchWeatherAuto();
+    }
+
+    // TỰ ĐỘNG KÉO THỜI TIẾT TỪ OPEN-METEO & GỬI FRAME 0x04
+    async function fetchWeatherAuto() {
+      const city = document.getElementById("citySelect").value;
+      const coords = CITY_COORDS[city] || CITY_COORDS["Hà Nội"];
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&current=temperature_2m,weather_code`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const json = await res.json();
+          const temp = Math.round(json.current.temperature_2m);
+          const code = json.current.weather_code;
+          const { name, icon, id, mode } = parseWeatherCode(code);
+
+          document.getElementById("weatherDisplayName").innerText = `${icon} ${name}`;
+          document.getElementById("weatherTempDetail").innerText = `Nhiệt độ hiện tại: ${temp}°C`;
+          document.getElementById("weatherTempBig").innerText = temp + "°";
+
+          const now = new Date();
+          const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+          document.getElementById("weatherAutoSyncStatusText").innerText = `Tự động đồng bộ mỗi 15 phút (vừa cập nhật lúc ${timeStr})`;
+
+          // Gửi Frame 0x04 xuống ESP32: [0x04, Temp_Signed, Weather_ID]
+          sendBytes(new Uint8Array([0x04, temp, id]));
+
+          // Tự đổi mode nếu người dùng bật công tắc
+          if (document.getElementById("switchAutoWeather").checked) {
+            selectMode(mode);
+          }
+          log(`Đã cập nhật thời tiết ${city}: ${temp}°C - ${name}`);
+        }
+      } catch (e) {
+        log("Lỗi tải thời tiết: " + e.message);
+      }
+    }
+
+    function refreshWeatherManually() {
+      fetchWeatherAuto();
+      syncSystemTimeNow();
+      showToast("Đã làm mới & đồng bộ thời tiết + RTC!");
+    }
+
+    function parseWeatherCode(code) {
+      if (code === 0) return { name: "Trời Nắng", icon: "☀️", id: 1, mode: 1 };
+      if (code <= 3) return { name: "Có Mây", icon: "⛅", id: 2, mode: 3 };
+      if (code <= 67) return { name: "Trời Mưa", icon: "🌧️", id: 3, mode: 5 };
+      if (code >= 95) return { name: "Sấm Chớp", icon: "⚡", id: 4, mode: 7 };
+      return { name: "Quang Mây", icon: "🌤️", id: 1, mode: 1 };
+    }
+
+    // ========================================================================
+    // 7. THIẾT BỊ: POMODORO, RTC, MÔ PHỎNG THÔNG BÁO & OTA
+    // ========================================================================
+    function triggerPomodoroCommand() {
+      sendCommand("pomo");
+      updateModeHighlight(12);
+      showToast("Đã kích hoạt đồng hồ Pomodoro 25p!");
+    }
+
+    function syncSystemTimeNow() {
+      const now = new Date();
+      const h = now.getHours();
+      const m = now.getMinutes();
+      const s = now.getSeconds();
+      // Frame 0x05: [0x05, Hour, Minute, Second]
+      sendBytes(new Uint8Array([0x05, h, m, s]));
+      showToast(`Đã đồng bộ giờ RTC: ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`);
+    }
+
+    function renderNotifApps() {
+      const container = document.getElementById("notifAppListContainer");
+      container.innerHTML = NOTIF_APPS.map((app, idx) => `
+        <div style="background:var(--md-sys-color-surface-container-high);border-radius:16px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:12px;cursor:pointer;" onclick="testNotifFlash(${app.r}, ${app.g}, ${app.b}, ${app.count}, '${app.name}')">
+            <span style="font-size:1.3rem;">${app.icon}</span>
+            <div>
+              <div style="font-size:0.9rem;font-weight:700;color:#fff;">${app.name}</div>
+              <div style="font-size:0.75rem;color:var(--md-sys-color-on-surface-variant);">Màu RGB(${app.r}, ${app.g}, ${app.b}) • Chớp ${app.count} lần</div>
+            </div>
+          </div>
+          <button class="filter-chip" onclick="testNotifFlash(${app.r}, ${app.g}, ${app.b}, ${app.count}, '${app.name}')">
+            <span style="width:12px;height:12px;border-radius:50%;background:rgb(${app.r},${app.g},${app.b});display:inline-block;"></span>
+            Thử chớp
+          </button>
+        </div>
+      `).join("");
+    }
+
+    function testNotifFlash(r, g, b, count, name) {
+      // Frame 0x03: [0x03, R, G, B, Flash_Count, Delay_10ms]
+      sendBytes(new Uint8Array([0x03, r, g, b, count, 15]));
+      showToast(`Chớp đèn thông báo ${name}!`);
+    }
+
+    // OTA FIRMWARE FLASHER QUA WEB BLUETOOTH
+    async function onOtaFileSelected(files) {
+      if (!files || !files.length) return;
+      const file = files[0];
+      if (!isConnected) {
+        showToast("Vui lòng kết nối Bluetooth tới đèn trước!", "⚠️");
+        return;
+      }
+
+      showToast(`Bắt đầu chuẩn bị nạp: ${file.name} (${file.size} bytes)...`);
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+
+      const progBlock = document.getElementById("otaProgressBlock");
+      const progBar = document.getElementById("otaProgressBar");
+      const progLabel = document.getElementById("otaPercentLabel");
+      const statusLabel = document.getElementById("otaStatusLabel");
+
+      progBlock.style.display = "block";
+      progBar.style.width = "0%";
+      statusLabel.innerText = "Đang gửi lệnh bắt đầu OTA...";
+
+      try {
+        // Frame 0x10: [0x10, Size0, Size1, Size2, Size3] Little Endian
+        const sz = bytes.length;
+        const startPkt = new Uint8Array([0x10, sz & 0xFF, (sz >> 8) & 0xFF, (sz >> 16) & 0xFF, (sz >> 24) & 0xFF]);
+        sendBytes(startPkt);
+        await new Promise(r => setTimeout(r, 300));
+
+        const chunkSize = 256;
+        let sent = 0;
+
+        while (sent < sz) {
+          const end = Math.min(sent + chunkSize, sz);
+          const chunkData = bytes.slice(sent, end);
+          // Frame 0x11: [0x11, Data...]
+          const packet = new Uint8Array(1 + chunkData.length);
+          packet[0] = 0x11;
+          packet.set(chunkData, 1);
+          await rxChar.writeValueWithoutResponse(packet);
+
+          sent = end;
+          const pct = Math.round(sent * 100 / sz);
+          progBar.style.width = pct + "%";
+          progLabel.innerText = pct + "%";
+          statusLabel.innerText = `Đang nạp Flash: ${sent} / ${sz} bytes...`;
+
+          await new Promise(r => setTimeout(r, 15));
+        }
+
+        // Frame 0x12: OTA End
+        await new Promise(r => setTimeout(r, 100));
+        sendBytes(new Uint8Array([0x12]));
+        statusLabel.innerText = "Nạp thành công! Đèn đang khởi động lại...";
+        progBar.style.width = "100%";
+        showToast("Nạp OTA hoàn tất thành công! Đèn đang khởi động lại...");
+      } catch (err) {
+        statusLabel.innerText = "Lỗi OTA: " + err.message;
+        showToast("Lỗi nạp OTA: " + err.message, "✕");
+      }
+    }
+
+    function sendCliCommand() {
+      const input = document.getElementById("cliInput");
+      const val = input.value.trim();
+      if (!val) return;
+      sendCommand(val);
+      input.value = "";
+    }
+
+    // TIỆN ÍCH CHUYỂN ĐỔI MÀU
+    function hexToRgb(hex) {
+      const bigint = parseInt(hex.replace("#", ""), 16);
+      return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
+    }
+
+    function rgbToHex(r, g, b) {
+      return "#" + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+    }
+
+    function hslToRgb(h, s, l) {
+      let r, g, b;
+      if (s === 0) {
+        r = g = b = l;
+      } else {
+        const hue2rgb = (p, q, t) => {
+          if (t < 0) t += 1;
+          if (t > 1) t -= 1;
+          if (t < 1/6) return p + (q - p) * 6 * t;
+          if (t < 1/2) return q;
+          if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+          return p;
+        };
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        const p = 2 * l - q;
+        r = hue2rgb(p, q, h + 1/3);
+        g = hue2rgb(p, q, h);
+        b = hue2rgb(p, q, h - 1/3);
+      }
+      return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
     }
   </script>
 </body>
