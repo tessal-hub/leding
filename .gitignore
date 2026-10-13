@@ -14,3 +14,12 @@ android/.idea
 android/*.iml
 android/app/*.iml
 
+.codex
+.cursor
+.gemini
+.opencode
+.impeccable
+.agent
+.agents
+.claude
+

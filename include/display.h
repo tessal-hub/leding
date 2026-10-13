@@ -31,3 +31,29 @@ void getCustomStaticColor(uint8_t &r, uint8_t &g, uint8_t &b);
 
 // Hiển thị thanh tiến trình nạp firmware OTA qua Bluetooth
 void displayOtaProgress(uint8_t percent, bool error = false);
+
+// ============================================================================
+// QUẢN LÝ 4 Ô BITMAP / PIXEL ART ĐỘC LẬP (MỖI Ô 8x8, TƯƠNG ỨNG 4 MẶT 1, 2, 3, 4)
+// ============================================================================
+#define NUM_SLOTS 4
+#define SLOT_PIXELS_COUNT 64
+
+void initSlots();
+void loadSlotsFromFlash();
+void saveSlotsToFlash();
+void markSlotsDirty();
+void processDeferredSlotsSave();
+
+// Thiết lập dữ liệu ô (slot: 0..3)
+void setSlotBitmap1Bit(uint8_t slot, uint8_t r, uint8_t g, uint8_t b, const uint8_t* rows);
+void setSlotPixel(uint8_t slot, uint8_t x, uint8_t y, uint32_t color);
+void setSlotPixelsRGB565(uint8_t slot, uint8_t chunkIdx, const uint8_t* data, size_t len);
+void clearSlot(uint8_t slot);
+void clearAllSlots();
+uint32_t getSlotPixel(uint8_t slot, uint8_t x, uint8_t y);
+
+// Vẽ dữ liệu 4 ô lên ma trận LED
+void renderFourSlotsToMatrix();
+
+// Áp dụng Preset icon sẵn có vào ô (heart, smile, star, bolt, fire, music, ghost, pacman, 1, 2, 3, 4)
+bool applySlotPreset(uint8_t slot, const char* presetName, uint8_t r = 0, uint8_t g = 0, uint8_t b = 0);

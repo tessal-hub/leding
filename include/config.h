@@ -73,8 +73,9 @@
 // Mode 8: DÒ HƯỚNG ĐI DÂY LED 0 -> 255 (Calibration Test - Công cụ Debug)
 // Mode 9: Tắt đèn (Standby / Off)
 // Mode 10: Màu tĩnh tùy chọn theo App (Static Color)
+// Mode 11: Hiển thị 4 ô tùy biến độc lập (4-Slot Custom Bitmap Display)
 #define DEFAULT_MODE          1      // Khởi động mặc định vào Mode 1: Lava Noise
-#define TOTAL_MODES           11     // 11 chế độ (bao gồm màu tĩnh theo App)
+#define TOTAL_MODES           12     // 12 chế độ (bao gồm màu tĩnh & 4 ô tùy biến)
 
 // ============================================================================
 // 6. CẤU HÌNH QUẢN LÝ NGUỒN & SẠC PIN (MODULE IP2312)

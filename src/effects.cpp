@@ -20,54 +20,16 @@
  * 3. Hàng thứ 2 có quay đầu zic-zac (Serpentine) hay nhảy lại đầu hàng?
  */
 void effectLedOrderTest(uint16_t stepDelayMs) {
-  Serial.println("\n========================================================");
-  Serial.println("  [CHẾ ĐỘ DÒ HƯỚNG ĐI DÂY LED VẬT LÝ 0 -> 255]");
-  Serial.println("  Quan sát chấm sáng trắng để xác định hướng đi dây:");
-  Serial.println("  - Tấm 1: LED 0   -> 63   (Đỏ)");
-  Serial.println("  - Tấm 2: LED 64  -> 127  (Xanh Lá)");
-  Serial.println("  - Tấm 3: LED 128 -> 191  (Xanh Dương)");
-  Serial.println("  - Tấm 4: LED 192 -> 255  (Vàng)");
-  Serial.println("========================================================");
-
   strip.clear();
-  strip.show();
-
   for (int i = 0; i < NUM_LEDS; i++) {
     uint8_t panel = i / 64;
-    uint8_t localIndex = i % 64;
-
-    // Khi chuyển sang tấm mới: in thông báo Serial
-    if (localIndex == 0) {
-      Serial.printf(">>> [TẤM %d] Bắt đầu từ LED index %d -> %d <<<\n", panel + 1, i, i + 63);
-    }
-
-    // Đặt lại màu cho bóng vừa đi qua (chính xác theo màu của tấm chứa bóng đó)
-    if (i > 0) {
-      uint8_t prevPanel = (i - 1) / 64;
-      uint32_t prevColor;
-      if (prevPanel == 0)      prevColor = strip.Color(90, 0, 0);     // Đỏ (Tấm 1: 0..63)
-      else if (prevPanel == 1) prevColor = strip.Color(0, 90, 0);     // Xanh lá (Tấm 2: 64..127)
-      else if (prevPanel == 2) prevColor = strip.Color(0, 0, 90);     // Xanh dương (Tấm 3: 128..191)
-      else                     prevColor = strip.Color(90, 90, 0);    // Vàng (Tấm 4: 192..255)
-      strip.setPixelColor(i - 1, prevColor);
-    }
-
-    // Bóng LED hiện tại sáng trắng rực rỡ để quan sát
+    uint32_t c = (panel == 0) ? strip.Color(90, 0, 0) : (panel == 1) ? strip.Color(0, 90, 0) : (panel == 2) ? strip.Color(0, 0, 90) : strip.Color(90, 90, 0);
+    if (i > 0) strip.setPixelColor(i - 1, c);
     strip.setPixelColor(i, strip.Color(255, 255, 255));
     strip.show();
-
     if (delayWithTouch(stepDelayMs)) return;
   }
-
-  // Đặt lại màu cho bóng cuối cùng 255 của Tấm 4
-  strip.setPixelColor(NUM_LEDS - 1, strip.Color(90, 90, 0));
-  strip.show();
-
-  // Kết thúc 1 chu kỳ: giữ sáng toàn bộ một lúc rồi chớp nhẹ
-  if (delayWithTouch(600)) return;
-  strip.clear();
-  strip.show();
-  if (delayWithTouch(200)) return;
+  delayWithTouch(400);
 }
 
 // ============================================================================
