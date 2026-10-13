@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>LED Matrix 360° Controller</title>
+  <meta name="theme-color" content="#0a0e17">
+  <style>
+    :root {
+      --bg: #070a12;
+      --card-bg: #111827;
+      --card-border: rgba(255, 255, 255, 0.10);
+      --card-hover: #1e293b;
+      --primary: #00f2fe;
+      --primary-glow: rgba(0, 242, 254, 0.25);
+      --accent: #38bdf8;
+      --amber: #f59e0b;
+      --green: #10b981;
+      --green-glow: rgba(16, 185, 129, 0.25);
+      --text: #f8fafc;
+      --text-muted: #cbd5e1; /* Đã nâng độ tương phản WCAG AA >= 6.5:1 */
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      padding-bottom: calc(85px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* HEADER */
+    header {
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #090e1a;
+      border-bottom: 1px solid var(--card-border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #00f2fe, #38bdf8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .brand-icon svg {
+      width: 24px;
+      height: 24px;
+      fill: #06101e;
+    }
+
+    .brand-text h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .brand-text p {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .btn-connect {
+      min-width: 48px;
+      min-height: 48px;
+      padding: 10px 18px;
+      border-radius: 24px;
+      border: 1px solid var(--primary);
+      background: rgba(0, 242, 254, 0.12);
+      color: var(--primary);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .btn-connect:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    .btn-connect.connected {
+      border-color: var(--green);
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--green);
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* MAIN CONTAINER */
+    main {
+      flex: 1;
+      padding: 16px;
+      max-width: 540px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* TELEMETRY BAR */
+    .status-bar {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .stat-pill {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-val {
+      font-size: 0.88rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* CARD CONTAINER */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 20px;
+      margin-bottom: 16px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* QUICK POWER & BRIGHTNESS */
+    .power-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 1px solid var(--card-border);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+
+    .power-btn.on {
+      border-color: var(--primary);
+      background: rgba(0, 242, 254, 0.15);
+      color: var(--primary);
+      box-shadow: 0 0 16px var(--primary-glow);
+    }
+
+    .slider-group {
+      margin-top: 6px;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .slider-val {
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 8px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.12);
+      outline: none;
+      transition: background 0.2s;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 0 10px var(--primary);
+      cursor: pointer;
+      border: 2px solid var(--primary);
+      transition: transform 0.15s;
+    }
+
+    input[type=range]:active::-webkit-slider-thumb {
+      transform: scale(1.18);
+    }
+
+    /* TAB CONTENT PANELS */
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* MODES GRID */
+    .modes-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .mode-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 14px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .mode-card:hover {
+      background: var(--card-hover);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    .mode-card.active {
+      border-color: var(--primary);
+      background: rgba(0, 242, 254, 0.12);
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.2);
+    }
+
+    .mode-card.active::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, transparent 50%, var(--primary) 50%);
+      border-radius: 0 15px 0 0;
+    }
+
+    .mode-icon {
+      font-size: 1.5rem;
+    }
+
+    .mode-name {
+      font-size: 0.85rem;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+
+    .mode-desc {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+
+    /* COLOR WHEEL */
+    .color-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+
+    #colorCanvas {
+      width: 240px;
+      height: 240px;
+      border-radius: 50%;
+      cursor: crosshair;
+      box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+      border: 2px solid var(--card-border);
+    }
+
+    .color-preview-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .color-swatch {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .color-info {
+      flex: 1;
+    }
+
+    .color-hex {
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .color-rgb {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .palette-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      width: 100%;
+    }
+
+    .palette-dot {
+      height: 42px;
+      border-radius: 12px;
+      cursor: pointer;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .palette-dot:active {
+      transform: scale(0.92);
+    }
+
+    /* TEXT MARQUEE FORM */
+    .text-input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .input-box {
+      width: 100%;
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: 1px solid var(--card-border);
+      background: rgba(255, 255, 255, 0.04);
+      color: #fff;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border 0.2s;
+    }
+
+    .input-box:focus {
+      border-color: var(--primary);
+      background: rgba(0, 242, 254, 0.05);
+    }
+
+    .btn-send {
+      padding: 14px;
+      border-radius: 14px;
+      border: none;
+      background: linear-gradient(135deg, #00f2fe, #4facfe);
+      color: #051329;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 18px var(--primary-glow);
+      transition: transform 0.15s;
+    }
+
+    .btn-send:active {
+      transform: scale(0.98);
+    }
+
+    .quick-text-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .text-chip {
+      padding: 8px 12px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .text-chip:hover {
+      background: rgba(0, 242, 254, 0.15);
+      color: var(--primary);
+      border-color: var(--primary);
+    }
+
+    /* MPU TILT VISUALIZER */
+    .tilt-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 18px;
+      gap: 16px;
+    }
+
+    .tilt-bubble {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      border: 2px dashed rgba(255, 255, 255, 0.15);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle, rgba(0, 242, 254, 0.05) 0%, transparent 70%);
+    }
+
+    .tilt-indicator {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00f2fe, #4facfe);
+      box-shadow: 0 0 18px var(--primary);
+      position: absolute;
+      transition: transform 0.1s ease-out;
+    }
+
+    .tilt-readings {
+      display: flex;
+      gap: 24px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    /* CONSOLE LOG */
+    #consoleLog {
+      background: #040811;
+      border-radius: 12px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 0.72rem;
+      height: 220px;
+      overflow-y: auto;
+      color: #38bdf8;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      line-height: 1.5;
+    }
+
+    /* BOTTOM NAV BAR */
+    nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 72px;
+      backdrop-filter: blur(25px);
+      background: rgba(10, 14, 24, 0.85);
+      border-top: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      padding: 0 10px;
+      z-index: 100;
+      max-width: 540px;
+      margin: 0 auto;
+    }
+
+    .nav-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      color: var(--text-muted);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.7rem;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      width: 56px;
+    }
+
+    .nav-btn svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+    }
+
+    .nav-btn.active {
+      color: var(--primary);
+    }
+
+    .nav-btn.active svg {
+      filter: drop-shadow(0 0 8px var(--primary-glow));
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7zm-1 18h2v2h-2v-2z"/></svg>
+      </div>
+      <div class="brand-text">
+        <h1>LED Lamp 360°</h1>
+        <p>ESP32 Bluetooth LE</p>
+      </div>
+    </div>
+    <button class="btn-connect" id="btnConnect" onclick="toggleBleConnection()">
+      <span class="pulse-dot"></span>
+      <span id="connectLabel">Kết nối</span>
+    </button>
+  </header>
+
+  <main>
+    <!-- TELEMETRY BAR -->
+    <div class="status-bar">
+      <div class="stat-pill">
+        <span class="stat-label">Nguồn Pin</span>
+        <span class="stat-val" id="statPower">
+          <span>--</span>
+        </span>
+      </div>
+      <div class="stat-pill">
+        <span class="stat-label">Điện áp STAT</span>
+        <span class="stat-val" id="statVolt">-- mV</span>
+      </div>
+      <div class="stat-pill">
+        <span class="stat-label">Chế độ</span>
+        <span class="stat-val" id="statMode">--</span>
+      </div>
+    </div>
+
+    <!-- QUICK BRIGHTNESS & POWER CARD -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0-5c.55 0 1 .45 1 1v2c0 .55-.45 1-1 1s-1-.45-1-1V3c0-.55.45-1 1-1zm0 16c.55 0 1 .45 1 1v2c0 .55-.45 1-1 1s-1-.45-1-1v-2c0-.55.45-1 1-1z"/></svg>
+          Độ sáng & Nguồn
+        </div>
+        <button class="power-btn on" id="btnPower" onclick="togglePower()">
+          <svg style="width:20px;height:20px;fill:currentColor" viewBox="0 0 24 24"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42A7.92 7.92 0 0 1 20 12c0 4.42-3.58 8-8 8s-8-3.58-8-8c0-2.45 1.1-4.64 2.84-6.13L5.42 4.45A9.953 9.953 0 0 0 2 12c0 5.52 4.48 10 10 10s10-4.48 10-10c0-3.04-1.36-5.76-3.17-6.83z"/></svg>
+        </button>
+      </div>
+      <div class="slider-group">
+        <div class="slider-header">
+          <span>Mức ánh sáng</span>
+          <span class="slider-val" id="brightVal">68 / 255</span>
+        </div>
+        <input type="range" id="brightSlider" min="5" max="255" value="68" oninput="onBrightChange(this.value)">
+      </div>
+    </div>
+
+    <!-- TAB 1: MODES -->
+    <div class="tab-pane active" id="tabModes">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Bộ tuyển tập 10 Chế độ</div>
+        </div>
+        <div class="modes-grid" id="modesContainer">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: COLOR -->
+    <div class="tab-pane" id="tabColor">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Bánh xe màu 16 Triệu màu</div>
+        </div>
+        <div class="color-section">
+          <canvas id="colorCanvas" width="240" height="240"></canvas>
+          <div class="color-preview-bar">
+            <div class="color-swatch" id="colorSwatch" style="background:#00f2fe"></div>
+            <div class="color-info">
+              <div class="color-hex" id="colorHex">#00F2FE</div>
+              <div class="color-rgb" id="colorRgb">RGB(0, 242, 254)</div>
+            </div>
+            <button class="btn-send" style="padding:10px 16px;font-size:0.85rem;" onclick="applyCurrentColor()">Áp dụng</button>
+          </div>
+          <div class="card-title" style="align-self:flex-start;font-size:0.85rem;margin-top:6px;">Bảng màu gợi ý nhanh</div>
+          <div class="palette-grid" id="paletteGrid">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: MARQUEE -->
+    <div class="tab-pane" id="tabMarquee">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Chạy chữ cuộn 360°</div>
+        </div>
+        <div class="text-input-group">
+          <input type="text" class="input-box" id="marqueeText" placeholder="Nhập chữ cần chạy (Ví dụ: HELLO ESP32)" value="HELLO WORLD">
+          <div class="slider-header" style="margin-bottom:2px;">
+            <span>Màu chữ</span>
+            <input type="color" id="textColorPicker" value="#00f2fe" style="border:none;background:none;cursor:pointer;width:32px;height:32px;">
+          </div>
+          <button class="btn-send" onclick="sendMarqueeText()">
+            <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            Bắn chữ lên đèn
+          </button>
+          <div class="card-title" style="font-size:0.85rem;margin-top:10px;">Tin nhắn nhanh mẫu</div>
+          <div class="quick-text-chips">
+            <span class="text-chip" onclick="quickSend('CHUC MUNG NAM MOI')">CHUC MUNG NAM MOI</span>
+            <span class="text-chip" onclick="quickSend('HAPPY BIRTHDAY')">HAPPY BIRTHDAY</span>
+            <span class="text-chip" onclick="quickSend('WELCOME')">WELCOME</span>
+            <span class="text-chip" onclick="quickSend('ON AIR / LIVE')">ON AIR / LIVE</span>
+            <span class="text-chip" onclick="quickSend('GOOD NIGHT')">GOOD NIGHT</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: SENSORS & TELEMETRY -->
+    <div class="tab-pane" id="tabSensors">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Con quay hồi chuyển MPU-6050</div>
+        </div>
+        <div class="tilt-box">
+          <div class="tilt-bubble">
+            <div class="tilt-indicator" id="tiltIndicator"></div>
+          </div>
+          <div class="tilt-readings">
+            <span>Pitch: <span id="valPitch" style="color:var(--primary)">0.0°</span></span>
+            <span>Roll: <span id="valRoll" style="color:var(--accent)">0.0°</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Nhật ký kết nối & CLI Console</div>
+        </div>
+        <div id="consoleLog"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- BOTTOM NAV BAR -->
+  <nav>
+    <button class="nav-btn active" onclick="switchTab('tabModes', this)">
+      <svg viewBox="0 0 24 24"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>
+      Hiệu ứng
+    </button>
+    <button class="nav-btn" onclick="switchTab('tabColor', this)">
+      <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.22 19.67 10.57 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9zm0 15c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>
+      Bảng màu
+    </button>
+    <button class="nav-btn" onclick="switchTab('tabMarquee', this)">
+      <svg viewBox="0 0 24 24"><path d="M2.5 4v3h5v12h3V7h5V4h-13zm19 5h-9v3h3v7h3v-7h3V9z"/></svg>
+      Chạy chữ
+    </button>
+    <button class="nav-btn" onclick="switchTab('tabSensors', this)">
+      <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 17.93V18a1 1 0 0 0-2 0v1.93A8 8 0 0 1 4.07 13H6a1 1 0 0 0 0-2H4.07A8 8 0 0 1 11 4.07V6a1 1 0 0 0 2 0V4.07A8 8 0 0 1 19.93 11H18a1 1 0 0 0 0 2h1.93A8 8 0 0 1 13 19.93z"/></svg>
+      Cảm biến
+    </button>
+  </nav>
+
+  <script>
+    // UUIDs CHUẨN NORDIC UART SERVICE (NUS)
+    const NUS_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+    const NUS_RX_UUID      = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // App Write -> ESP32
+    const NUS_TX_UUID      = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // ESP32 Notify -> App
+
+    let bleDevice = null;
+    let rxChar = null;
+    let txChar = null;
+    let isConnected = false;
+    let currentModeId = 1;
+    let currentColor = { r: 0, g: 242, b: 254 };
+
+    // 10 CHẾ ĐỘ HIỆU ỨNG TINH CHỌN
+    const MODES = [
+      { id: 0, name: "Tự động đổi", icon: "🔄", desc: "Auto-Cycle 5 mode đỉnh cao" },
+      { id: 1, name: "Lava Noise", icon: "🌋", desc: "Dung nham 3D mượt mà (Mặc định)" },
+      { id: 2, name: "Edge Light", icon: "✨", desc: "Đèn viền 4 cạnh góc tối giản" },
+      { id: 3, name: "Face Wave", icon: "🌊", desc: "Sóng nhịp 4 mặt chuyển sắc" },
+      { id: 4, name: "Tilt Glow", icon: "🎯", desc: "Bám góc nghiêng & lắc bừng sáng" },
+      { id: 5, name: "Water Physics", icon: "💧", desc: "Mặt nước dập dềnh & giọt bắn" },
+      { id: 6, name: "Night Breathing", icon: "🌙", desc: "Nhịp thở ban đêm êm dịu" },
+      { id: 7, name: "Aurora Flow", icon: "🌌", desc: "Cực quang uốn lượn tím - cyan" },
+      { id: 8, name: "Dò dây LED", icon: "🔍", desc: "Calibration 0 -> 255" },
+      { id: 9, name: "Tắt đèn", icon: "💤", desc: "Standby ngủ đông" },
+    ];
+
+    // BẢNG MÀU PRESET
+    const PRESET_PALETTES = [
+      { hex: "#00F2FE", r: 0, g: 242, b: 254 },
+      { hex: "#FF007F", r: 255, g: 0, b: 127 },
+      { hex: "#FF9900", r: 255, g: 153, b: 0 },
+      { hex: "#10B981", r: 16, g: 185, b: 129 },
+      { hex: "#8B5CF6", r: 139, g: 92, b: 246 },
+      { hex: "#EF4444", r: 239, g: 68, b: 68 },
+      { hex: "#FACC15", r: 250, g: 204, b: 21 },
+      { hex: "#38BDF8", r: 56, g: 189, b: 248 },
+      { hex: "#EC4899", r: 236, g: 72, b: 153 },
+      { hex: "#FFFFFF", r: 255, g: 255, b: 255 }
+    ];
+
+    // KHỞI TẠO GIAO DIỆN
+    window.addEventListener("DOMContentLoaded", () => {
+      renderModes();
+      renderPalettes();
+      initColorWheel();
+      log("Sẵn sàng! Bấm 'Kết nối' để tìm đèn LED-MATRIX-360.");
+    });
+
+    function log(msg) {
+      const el = document.getElementById("consoleLog");
+      const time = new Date().toTimeString().split(" ")[0];
+      el.innerHTML += `<div>[${time}] ${msg}</div>`;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function renderModes() {
+      const container = document.getElementById("modesContainer");
+      container.innerHTML = MODES.map(m => `
+        <div class="mode-card ${m.id === currentModeId ? 'active' : ''}" id="modeCard_${m.id}" onclick="selectMode(${m.id})">
+          <div class="mode-icon">${m.icon}</div>
+          <div class="mode-name">${m.name}</div>
+          <div class="mode-desc">${m.desc}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderPalettes() {
+      const container = document.getElementById("paletteGrid");
+      container.innerHTML = PRESET_PALETTES.map(p => `
+        <div class="palette-dot" style="background:${p.hex};box-shadow:0 0 10px ${p.hex}55" onclick="setPresetColor(${p.r},${p.g},${p.b},'${p.hex}')"></div>
+      `).join("");
+    }
+
+    function switchTab(tabId, btn) {
+      document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+      document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+      document.getElementById(tabId).classList.add("active");
+      btn.classList.add("active");
+    }
+
+    // KẾT NỐI BLUETOOTH LE
+    async function toggleBleConnection() {
+      if (isConnected) {
+        if (bleDevice && bleDevice.gatt.connected) {
+          bleDevice.gatt.disconnect();
+        }
+        return;
+      }
+
+      if (!navigator.bluetooth) {
+        alert("Trình duyệt này chưa hỗ trợ Web Bluetooth! Hãy mở bằng Google Chrome trên Android hoặc máy tính.");
+        return;
+      }
+
+      try {
+        log("Đang quét tìm thiết bị 'LED-MATRIX-360'...");
+        bleDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ name: "LED-MATRIX-360" }],
+          optionalServices: [NUS_SERVICE_UUID]
+        });
+
+        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+        log("Đang kết nối GATT Server...");
+
+        const server = await bleDevice.gatt.connect();
+        const service = await server.getPrimaryService(NUS_SERVICE_UUID);
+
+        rxChar = await service.getCharacteristic(NUS_RX_UUID);
+        txChar = await service.getCharacteristic(NUS_TX_UUID);
+
+        await txChar.startNotifications();
+        txChar.addEventListener('characteristicvaluechanged', onTelemetryReceived);
+
+        isConnected = true;
+        updateConnectionUI(true);
+        log("KẾT NỐI THÀNH CÔNG tới " + bleDevice.name);
+      } catch (err) {
+        log("Lỗi kết nối: " + err.message);
+      }
+    }
+
+    function onDisconnected() {
+      isConnected = false;
+      updateConnectionUI(false);
+      log("Đã ngắt kết nối Bluetooth.");
+    }
+
+    function updateConnectionUI(connected) {
+      const btn = document.getElementById("btnConnect");
+      const label = document.getElementById("connectLabel");
+      if (connected) {
+        btn.classList.add("connected");
+        label.innerText = "Đã kết nối";
+      } else {
+        btn.classList.remove("connected");
+        label.innerText = "Kết nối";
+      }
+    }
+
+    // GỬI LỆNH XUỐNG ESP32
+    async function sendCommand(cmdStr) {
+      if (!rxChar || !isConnected) {
+        log("Chưa kết nối Bluetooth! Đang mô phỏng lệnh: " + cmdStr);
+        return;
+      }
+      try {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(cmdStr + "\n");
+        await rxChar.writeValueWithoutResponse(data);
+        log("Đã gửi: " + cmdStr);
+      } catch (e) {
+        log("Lỗi gửi dữ liệu: " + e.message);
+      }
+    }
+
+    // NHẬN TELEMETRY JSON TỪ ESP32
+    function onTelemetryReceived(event) {
+      const decoder = new TextDecoder();
+      const raw = decoder.decode(event.target.value);
+      try {
+        const d = JSON.parse(raw);
+        // Cập nhật Mode
+        if (d.m !== undefined) {
+          currentModeId = d.m;
+          document.querySelectorAll(".mode-card").forEach(c => c.classList.remove("active"));
+          const activeCard = document.getElementById("modeCard_" + d.m);
+          if (activeCard) activeCard.classList.add("active");
+          document.getElementById("statMode").innerText = d.mn || `Mode ${d.m}`;
+        }
+        // Cập nhật độ sáng
+        if (d.b !== undefined) {
+          document.getElementById("brightSlider").value = d.b;
+          document.getElementById("brightVal").innerText = `${d.b} / 255`;
+        }
+        // Cập nhật nguồn & Pin
+        if (d.pwr !== undefined) {
+          const pwrEl = document.getElementById("statPower");
+          if (d.pwr === 1) {
+            pwrEl.innerHTML = `<span style="color:var(--amber)">⚡ ĐANG SẠC</span>`;
+          } else if (d.pwr === 2) {
+            pwrEl.innerHTML = `<span style="color:var(--green)">✓ PIN ĐẦY 100%</span>`;
+          } else {
+            pwrEl.innerHTML = `<span>🔋 DÙNG PIN</span>`;
+          }
+        }
+        // Cập nhật điện áp
+        if (d.stat !== undefined) {
+          document.getElementById("statVolt").innerText = `${d.stat} mV`;
+        }
+        // Cập nhật con quay MPU
+        if (d.pitch !== undefined && d.roll !== undefined) {
+          document.getElementById("valPitch").innerText = `${d.pitch.toFixed(1)}°`;
+          document.getElementById("valRoll").innerText = `${d.roll.toFixed(1)}°`;
+          const bubble = document.getElementById("tiltIndicator");
+          const px = Math.max(-50, Math.min(50, d.roll * 1.5));
+          const py = Math.max(-50, Math.min(50, -d.pitch * 1.5));
+          bubble.style.transform = `translate(${px}px, ${py}px)`;
+        }
+      } catch (err) {
+        log("Data: " + raw);
+      }
+    }
+
+    // CÁC HÀM ĐIỀU KHIỂN
+    function selectMode(modeId) {
+      currentModeId = modeId;
+      document.querySelectorAll(".mode-card").forEach(c => c.classList.remove("active"));
+      const card = document.getElementById("modeCard_" + modeId);
+      if (card) card.classList.add("active");
+      sendCommand(`mode ${modeId}`);
+    }
+
+    let brightDebounce = null;
+    function onBrightChange(val) {
+      document.getElementById("brightVal").innerText = `${val} / 255`;
+      clearTimeout(brightDebounce);
+      brightDebounce = setTimeout(() => {
+        sendCommand(`bright ${val}`);
+      }, 80);
+    }
+
+    function togglePower() {
+      const btn = document.getElementById("btnPower");
+      if (btn.classList.contains("on")) {
+        btn.classList.remove("on");
+        selectMode(9); // Tắt đèn (Standby)
+      } else {
+        btn.classList.add("on");
+        selectMode(1); // Bật về Mode 1
+      }
+    }
+
+    function sendMarqueeText() {
+      const text = document.getElementById("marqueeText").value.trim();
+      const colHex = document.getElementById("textColorPicker").value;
+      const rgb = hexToRgb(colHex);
+      if (!text) return;
+      sendCommand(`text ${rgb.r} ${rgb.g} ${rgb.b} ${text}`);
+    }
+
+    function quickSend(str) {
+      document.getElementById("marqueeText").value = str;
+      sendMarqueeText();
+    }
+
+    function setPresetColor(r, g, b, hex) {
+      currentColor = { r, g, b };
+      document.getElementById("colorSwatch").style.background = hex;
+      document.getElementById("colorHex").innerText = hex.toUpperCase();
+      document.getElementById("colorRgb").innerText = `RGB(${r}, ${g}, ${b})`;
+      sendCommand(`color ${r} ${g} ${b}`);
+    }
+
+    function applyCurrentColor() {
+      sendCommand(`color ${currentColor.r} ${currentColor.g} ${currentColor.b}`);
+    }
+
+    function hexToRgb(hex) {
+      const bigint = parseInt(hex.replace("#", ""), 16);
+      return {
+        r: (bigint >> 16) & 255,
+        g: (bigint >> 8) & 255,
+        b: bigint & 255
+      };
+    }
+
+    // BÁNH XE MÀU CANVAS HSV (Tối ưu hóa: 1ms qua ImageData thay vì 57,600 draw calls)
+    function initColorWheel() {
+      const canvas = document.getElementById("colorCanvas");
+      const ctx = canvas.getContext("2d");
+      const width = canvas.width;
+      const height = canvas.height;
+      const radius = width / 2;
+
+      const imgData = ctx.createImageData(width, height);
+      const data = imgData.data;
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const dx = x - radius;
+          const dy = y - radius;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const index = (y * width + x) * 4;
+
+          if (dist <= radius) {
+            let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+            if (angle < 0) angle += 360;
+            const sat = Math.min(1, dist / radius);
+
+            // Chuyển HSL sang RGB nhanh
+            const c = sat;
+            const hPrime = angle / 60;
+            const xVal = c * (1 - Math.abs((hPrime % 2) - 1));
+            let r1 = 0, g1 = 0, b1 = 0;
+            if (hPrime < 1) { r1 = c; g1 = xVal; }
+            else if (hPrime < 2) { r1 = xVal; g1 = c; }
+            else if (hPrime < 3) { g1 = c; b1 = xVal; }
+            else if (hPrime < 4) { g1 = xVal; b1 = c; }
+            else if (hPrime < 5) { r1 = xVal; b1 = c; }
+            else { r1 = c; b1 = xVal; }
+
+            const m = 0.5 - c * 0.5;
+            data[index]     = Math.round((r1 + m) * 255);
+            data[index + 1] = Math.round((g1 + m) * 255);
+            data[index + 2] = Math.round((b1 + m) * 255);
+            data[index + 3] = 255;
+          } else {
+            data[index + 3] = 0; // Trong suốt ngoài vòng tròn
+          }
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+
+      function pickColor(e) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const x = Math.floor((clientX - rect.left) * (canvas.width / rect.width));
+        const y = Math.floor((clientY - rect.top) * (canvas.height / rect.height));
+
+        const pixel = ctx.getImageData(x, y, 1, 1).data;
+        if (pixel[3] > 0) {
+          currentColor = { r: pixel[0], g: pixel[1], b: pixel[2] };
+          const hex = `#${((1 << 24) + (pixel[0] << 16) + (pixel[1] << 8) + pixel[2]).toString(16).slice(1)}`;
+          document.getElementById("colorSwatch").style.background = hex;
+          document.getElementById("colorHex").innerText = hex.toUpperCase();
+          document.getElementById("colorRgb").innerText = `RGB(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`;
+          document.getElementById("textColorPicker").value = hex;
+        }
+      }
+
+      canvas.addEventListener("click", pickColor);
+      canvas.addEventListener("touchmove", (e) => { e.preventDefault(); pickColor(e); });
+    }
+  </script>
+</body>
+</html>

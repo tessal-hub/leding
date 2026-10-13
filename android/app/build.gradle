@@ -1,0 +1,114 @@
+/**
+ * Module-level Gradle build configuration for the LEDMatrix360 Android application.
+ *
+ * This module configures:
+ * - Application ID: com.esp32.ledmatrix360
+ * - Target SDK: 34 (Android 14) / Min SDK: 24 (Android 7.0)
+ * - UI Toolkit: Jetpack Compose with Material 3
+ * - Background Tasks: WorkManager for weather & time synchronization
+ * - Local Storage: DataStore Preferences
+ */
+
+plugins {
+    // Android Application plugin for building the main Android app artifact
+    id 'com.android.application'
+    // Kotlin Android plugin for compiling Kotlin code for Android
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
+}
+
+android {
+    // Unique package namespace for generated R classes and BuildConfig
+    namespace 'com.esp32.ledmatrix360'
+    
+    // Android SDK version used to compile the application
+    compileSdk 34
+
+    defaultConfig {
+        // Unique application identifier on device and Google Play
+        applicationId "com.esp32.ledmatrix360"
+        
+        // Minimum Android version supported (Android 7.0 Nougat)
+        minSdk 24
+        
+        // Target Android version (Android 14)
+        targetSdk 34
+        
+        // Internal version code for app updates
+        versionCode 1
+        
+        // User-visible version string
+        versionName "1.0.0"
+
+        // Default test runner for instrumented unit and UI tests
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        
+        // Enable support library vector drawables for older Android devices
+        vectorDrawables {
+            useSupportLibrary true
+        }
+    }
+
+    buildTypes {
+        release {
+            // Enable/disable code shrinking, obfuscation, and optimization
+            minifyEnabled false
+            // ProGuard rule files applied to release builds
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    // Java source and target compatibility settings
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // Kotlin JVM target version configuration
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    // Build features configuration (Jetpack Compose enabled)
+    buildFeatures {
+        compose true
+    }
+
+    // Kotlin compiler extension version required for Compose support
+
+    // Packaging options to exclude duplicate resource or license files from APK
+    packaging {
+        resources {
+            excludes += '/META-INF/{AL2.0,LGPL2.1}'
+        }
+    }
+}
+
+dependencies {
+    // Core AndroidX libraries
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+    implementation 'androidx.activity:activity-compose:1.8.2'
+
+    // Jetpack Compose Bill of Materials (BOM) for centralized version management
+    implementation platform('androidx.compose:compose-bom:2024.02.00')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.compose.material:material-icons-extended'
+    
+    // Kotlin Coroutines for asynchronous operations
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+
+    // WorkManager for background task scheduling (e.g., Weather & Time Sync)
+    implementation 'androidx.work:work-runtime-ktx:2.9.0'
+
+    // DataStore Preferences for persistent settings
+    implementation 'androidx.datastore:datastore-preferences:1.0.0'
+
+    // Jetpack Compose tooling & testing dependencies (debug builds only)
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+    debugImplementation 'androidx.compose.ui:ui-test-manifest'
+}
+
