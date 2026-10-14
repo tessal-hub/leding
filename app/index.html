@@ -1034,6 +1034,9 @@
         right: 20px;
         bottom: 84px;
         align-items: center;
+      }
+    }
+
     /* MATERIAL YOU MODAL DIALOG */
     .m3-modal-backdrop {
       position: fixed;
@@ -1795,7 +1798,8 @@
       { id: 11, name: "4 Ô Bitmap tùy biến", icon: "🖼️", desc: "Hiển thị 4 tranh độc lập trên 4 mặt trụ" },
       { id: 12, name: "Đồng hồ để bàn 360°", icon: "⏰", desc: "Đồng hồ số để bàn & hiển thị thời tiết" },
       { id: 13, name: "Nhịp đập trái tim", icon: "❤️", desc: "Hiệu ứng trái tim đập bừng sáng lãng mạn" },
-      { id: 14, name: "Sóng tình yêu lan tỏa", icon: "💖", desc: "Vòng sóng tình yêu lãng mạn mộng mơ" }
+      { id: 14, name: "Sóng tình yêu lan tỏa", icon: "💖", desc: "Vòng sóng tình yêu lãng mạn mộng mơ" },
+      { id: 15, name: "Thời tiết 360°", icon: "🌦️", desc: "Cảnh thời tiết sống động theo giờ Ngày/Đêm" }
     ];
 
     // 9 MÀU PRESET CHUẨN M3
@@ -2077,16 +2081,21 @@
     }
 
     // GỬI GÓI TIN NHỊ PHÂN (BINARY GATT FRAMES 0x01..0x06)
+    let isSendingBytes = false;
     async function sendBytes(byteArray) {
       if (!isConnected || !rxChar) {
         log("[Ngoại tuyến] Gửi binary frame (" + byteArray.length + " bytes)");
         return;
       }
+      if (isSendingBytes) return;
+      isSendingBytes = true;
       try {
         await rxChar.writeValueWithoutResponse(byteArray);
         log("-> Gửi Binary Frame Opcode 0x" + byteArray[0].toString(16).padStart(2, '0').toUpperCase() + " (" + byteArray.length + " bytes)");
       } catch (e) {
         log("Lỗi gửi binary: " + e.message);
+      } finally {
+        isSendingBytes = false;
       }
     }
 
@@ -2252,6 +2261,7 @@
       showToast(`Màu tĩnh: RGB(${r}, ${g}, ${b})`);
     }
 
+    let lastHueSendTime = 0;
     function onHueSliderChange(hue) {
       document.getElementById("hueAngleLabel").innerText = hue + "°";
       const rgb = hslToRgb(hue / 360, 1.0, 0.5);
@@ -2259,7 +2269,11 @@
       document.getElementById("colorHeroPreview").style.background = hex;
       document.getElementById("colorHeroCode").innerText = `RGB(${rgb.r}, ${rgb.g}, ${rgb.b})`;
       currentRgb = rgb;
-      sendBytes(new Uint8Array([0x01, rgb.r, rgb.g, rgb.b, currentBrightness]));
+      const now = Date.now();
+      if (now - lastHueSendTime > 60) {
+        lastHueSendTime = now;
+        sendBytes(new Uint8Array([0x01, rgb.r, rgb.g, rgb.b, currentBrightness]));
+      }
     }
 
     function applyCurrentColor() {
@@ -2478,6 +2492,20 @@
             document.getElementById(`cell_32x8_${x}_${y}`).style.background = hex;
           }
         }
+      } else if (type === 'stars') {
+        const stars = [[2,1],[5,5],[9,2],[12,6],[15,3],[18,1],[21,5],[25,2],[28,6],[31,3]];
+        for (const [x, y] of stars) {
+          fullCanvasPixels[y][x] = "#FFFFFF";
+          document.getElementById(`cell_32x8_${x}_${y}`).style.background = "#FFFFFF";
+        }
+        for (let x = 0; x < 32; x++) {
+          fullCanvasPixels[7][x] = "#7828C8";
+          document.getElementById(`cell_32x8_${x}_7`).style.background = "#7828C8";
+          if (x % 3 === 0) {
+            fullCanvasPixels[6][x] = "#00B4FF";
+            document.getElementById(`cell_32x8_${x}_6`).style.background = "#00B4FF";
+          }
+        }
       } else if (type === 'ecg') {
         for (let x = 0; x < 32; x++) {
           const y = (x % 8 === 2) ? 3 : ((x % 8 === 3) ? 1 : ((x % 8 === 4) ? 6 : ((x % 8 === 5) ? 2 : 4)));
@@ -2520,19 +2548,46 @@
       document.getElementById("btnModeFull32x8").classList.toggle("active", !is4);
     }
 
-    // GỬI BITMAP 8X8 QUA FRAME 0x06
-    function sendCurrentSlot() {
+    function colorToRgb565(hex) {
+      if (!hex || hex === "#000000") return 0;
+      const rgb = hexToRgb(hex);
+      const r5 = (rgb.r >> 3) & 0x1F;
+      const g6 = (rgb.g >> 2) & 0x3F;
+      const b5 = (rgb.b >> 3) & 0x1F;
+      return (r5 << 11) | (g6 << 5) | b5;
+    }
+
+    async function sendSlotRGB565(slotNum, grid8) {
+      for (let chunkIdx = 0; chunkIdx < 4; chunkIdx++) {
+        const packet = new Uint8Array(35);
+        packet[0] = 0x07;
+        packet[1] = slotNum;
+        packet[2] = chunkIdx;
+        for (let i = 0; i < 16; i++) {
+          const pxIdx = chunkIdx * 16 + i;
+          const x = pxIdx % 8;
+          const y = Math.floor(pxIdx / 8);
+          const col = grid8[y][x];
+          const c565 = colorToRgb565(col);
+          packet[3 + i * 2] = c565 & 0xFF;
+          packet[3 + i * 2 + 1] = (c565 >> 8) & 0xFF;
+        }
+        await sendBytes(packet);
+        await new Promise(r => setTimeout(r, 25));
+      }
+    }
+
+    // GỬI BITMAP 8X8 QUA FRAME 0x07 (RGB565 ĐA SẮC) HOẶC FRAME 0x06
+    async function sendCurrentSlot() {
       const slotNum = selectedSlotIndex + 1;
-      const data = encodeSlotToFrame06(slotNum, slotBitmaps[selectedSlotIndex]);
-      sendBytes(data);
-      showToast(`Đã gửi Mặt ${slotNum} lên đèn`);
+      await sendSlotRGB565(slotNum, slotBitmaps[selectedSlotIndex]);
+      showToast(`Đã gửi Mặt ${slotNum} lên đèn (RGB đa sắc)`);
     }
 
     async function sendAllFourSlots() {
       for (let i = 0; i < 4; i++) {
-        const data = encodeSlotToFrame06(i + 1, slotBitmaps[i]);
-        sendBytes(data);
-        await new Promise(r => setTimeout(r, 40));
+        await sendSlotRGB565(i + 1, slotBitmaps[i]);
+        await new Promise(r => setTimeout(r, 30));
       }
       await new Promise(r => setTimeout(r, 60));
       selectMode(11); // Bật Mode 11 (4 Ô Bitmap)
@@ -2540,7 +2595,7 @@
     }
 
     async function sendFullCanvasToLamp() {
-      // Chia 32x8 thành 4 ô 8x8 rồi gửi Frame 0x06 lần lượt
+      // Chia 32x8 thành 4 ô 8x8 rồi gửi Frame 0x07 RGB565 lần lượt
       for (let slot = 0; slot < 4; slot++) {
         const slotData = createEmpty8x8();
         for (let y = 0; y < 8; y++) {
@@ -2548,13 +2603,12 @@
             slotData[y][x] = fullCanvasPixels[y][slot * 8 + x];
           }
         }
-        const frame = encodeSlotToFrame06(slot + 1, slotData);
-        sendBytes(frame);
-        await new Promise(r => setTimeout(r, 40));
+        await sendSlotRGB565(slot + 1, slotData);
+        await new Promise(r => setTimeout(r, 30));
       }
       await new Promise(r => setTimeout(r, 60));
       selectMode(11);
-      showToast("Đã gửi toàn bộ Canvas 32x8 lên đèn!");
+      showToast("Đã gửi toàn bộ Canvas 32x8 đa sắc lên đèn!");
     }
 
     function encodeSlotToFrame06(slotNum, grid8) {

@@ -72,9 +72,17 @@ class BleManager(private val context: Context) {
         }
     }
 
-    fun startScan() {
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val scanTimeoutRunnable = Runnable {
+        if (_isScanning.value) {
+            log("Hết thời gian quét BLE (15s). Tự động dừng quét.")
+            stopScan()
+        }
+    }
+
+    fun startScan(timeoutMs: Long = 15_000L) {
         val scanner = bluetoothAdapter?.bluetoothLeScanner
-        if (scanner == null) {
+        if (scanner == null || !bluetoothAdapter.isEnabled) {
             log("Bluetooth chưa được bật hoặc không khả dụng!")
             return
         }
@@ -83,22 +91,35 @@ class BleManager(private val context: Context) {
         _isScanning.value = true
         log("Bắt đầu quét tìm '${LampConstants.DEVICE_NAME}'...")
 
-        val filter = ScanFilter.Builder().build()
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
 
-        scanner.startScan(listOf(filter), settings, scanCallback)
+        scanner.startScan(emptyList(), settings, scanCallback)
+        mainHandler.removeCallbacks(scanTimeoutRunnable)
+        mainHandler.postDelayed(scanTimeoutRunnable, timeoutMs)
     }
 
     fun stopScan() {
+        mainHandler.removeCallbacks(scanTimeoutRunnable)
         if (!_isScanning.value) return
-        bluetoothAdapter?.bluetoothLeScanner?.stopScan(scanCallback)
+        try {
+            bluetoothAdapter?.bluetoothLeScanner?.stopScan(scanCallback)
+        } catch (e: Exception) {
+            Log.w("BleManager", "stopScan error: ${e.message}")
+        }
         _isScanning.value = false
     }
 
     fun connect(device: BluetoothDevice) {
         log("Đang tạo GATT Connection...")
+        // Đóng GATT cũ trước khi tạo kết nối mới để tránh lỗi GATT 133
+        bluetoothGatt?.let { oldGatt ->
+            try {
+                oldGatt.disconnect()
+                oldGatt.close()
+            } catch (_: Exception) {}
+        }
         bluetoothGatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
         } else {
@@ -117,15 +138,30 @@ class BleManager(private val context: Context) {
     private val gattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
-                log("Đã kết nối GATT! Đang khám phá dịch vụ...")
+                log("Đã kết nối GATT! Đang yêu cầu MTU 512...")
                 _isConnected.value = true
-                gatt?.discoverServices()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    gatt?.requestMtu(512)
+                } else {
+                    gatt?.discoverServices()
+                }
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 log("Đã ngắt kết nối GATT.")
                 _isConnected.value = false
                 rxCharacteristic = null
                 txCharacteristic = null
+                try {
+                    gatt?.close()
+                } catch (_: Exception) {}
+                if (bluetoothGatt == gatt) {
+                    bluetoothGatt = null
+                }
             }
+        }
+
+        override fun onMtuChanged(gatt: BluetoothGatt?, mtu: Int, status: Int) {
+            log("BLE MTU cập nhật: $mtu (status: $status). Đang khám phá dịch vụ...")
+            gatt?.discoverServices()
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
@@ -251,10 +287,7 @@ class BleManager(private val context: Context) {
     fun sendMarqueeText(text: String) {
         val cleanText = text.trim()
         if (cleanText.isNotEmpty()) {
-            _telemetryState.value = _telemetryState.value.copy(
-                mode = 9,
-                modeName = "Chữ chạy Marquee"
-            )
+            // ponytail: transient text overlay, keep telemetry.mode unchanged (mode 9 is Standby per firmware)
             sendCommand("text $cleanText")
         }
     }
@@ -263,28 +296,8 @@ class BleManager(private val context: Context) {
      * Gửi khung vẽ Pixel Art 32x8
      */
     fun sendPixelCanvas(canvasState: PixelCanvasState, brightness: Int = 0) {
-        // Lấy màu nổi bật nhất từ canvas để hiển thị màu tĩnh
-        var sumR = 0
-        var sumG = 0
-        var sumB = 0
-        var count = 0
-
-        for (y in 0 until canvasState.height) {
-            for (x in 0 until canvasState.width) {
-                val color = canvasState.getPixel(x, y)
-                if (color != android.graphics.Color.BLACK) {
-                    sumR += android.graphics.Color.red(color)
-                    sumG += android.graphics.Color.green(color)
-                    sumB += android.graphics.Color.blue(color)
-                    count++
-                }
-            }
-        }
-
-        if (count > 0) {
-            setStaticColor(sumR / count, sumG / count, sumB / count, brightness)
-        } else {
-            setStaticColor(0, 0, 0, brightness)
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            sendFullCanvas32x8(canvasState)
         }
     }
 
@@ -292,10 +305,7 @@ class BleManager(private val context: Context) {
      * Kích hoạt Pomodoro 25p từ xa
      */
     fun triggerPomodoro() {
-        _telemetryState.value = _telemetryState.value.copy(
-            mode = 12,
-            modeName = "Đồng hồ Pomodoro"
-        )
+        // ponytail: transient overlay, keep telemetry.mode unchanged (12 is Desk Clock per firmware)
         sendCommand("pomo")
     }
 
@@ -314,7 +324,7 @@ class BleManager(private val context: Context) {
     fun setStaticColor(r: Int, g: Int, b: Int, brightness: Int = 0) {
         _telemetryState.value = _telemetryState.value.copy(
             mode = 10,
-            modeName = "Màu tĩnh"
+            modeName = LampConstants.MODES.find { it.id == 10 }?.name ?: "Màu tĩnh"
         )
         sendBytes(byteArrayOf(0x01.toByte(), r.toByte(), g.toByte(), b.toByte(), brightness.toByte()))
     }
@@ -323,24 +333,9 @@ class BleManager(private val context: Context) {
      * Frame 0x02: Chuyển hiệu ứng [0x02, Effect_ID, Speed, Brightness, Palette_ID]
      */
     fun setEffect(effectId: Int, speed: Int = 50, brightness: Int = 0, paletteId: Int = 0) {
-        val modeNames = mapOf(
-            0 to "Ma trận mưa số",
-            1 to "Lửa cuộn 360°",
-            2 to "Đồng hồ Digital",
-            3 to "Nhịp điệu Âm nhạc",
-            4 to "Cầu vồng cực quang",
-            5 to "Plasma lượng tử",
-            6 to "Sao băng đêm",
-            7 to "Đom đóm phát sáng",
-            8 to "Đồng hồ cát",
-            9 to "Chữ chạy Marquee",
-            10 to "Màu tĩnh",
-            11 to "Tùy chỉnh 4 Ô",
-            12 to "Đồng hồ Pomodoro"
-        )
         _telemetryState.value = _telemetryState.value.copy(
             mode = effectId,
-            modeName = modeNames[effectId] ?: "Chế độ $effectId"
+            modeName = LampConstants.MODES.find { it.id == effectId }?.name ?: "Chế độ $effectId"
         )
         sendBytes(byteArrayOf(0x02.toByte(), effectId.toByte(), speed.toByte(), brightness.toByte(), paletteId.toByte()))
     }
@@ -383,6 +378,32 @@ class BleManager(private val context: Context) {
     }
 
     /**
+     * Frame 0x07: Gửi dữ liệu màu RGB565 chi tiết theo từng chunk 16 pixels
+     * [0x07, Slot (1..4), Chunk_Idx (0..3), Data (32 bytes)...]
+     */
+    suspend fun sendSlotRGB565(slot: Int, pixels: List<Int>) {
+        if (!_isConnected.value || pixels.size < 64) return
+        for (chunkIdx in 0..3) {
+            val packet = ByteArray(35)
+            packet[0] = 0x07.toByte()
+            packet[1] = slot.toByte()
+            packet[2] = chunkIdx.toByte()
+            for (i in 0 until 16) {
+                val pxIdx = chunkIdx * 16 + i
+                val color = pixels[pxIdx]
+                val r5 = (android.graphics.Color.red(color) shr 3) and 0x1F
+                val g6 = (android.graphics.Color.green(color) shr 2) and 0x3F
+                val b5 = (android.graphics.Color.blue(color) shr 3) and 0x1F
+                val c565 = (r5 shl 11) or (g6 shl 5) or b5
+                packet[3 + i * 2] = (c565 and 0xFF).toByte()
+                packet[3 + i * 2 + 1] = ((c565 shr 8) and 0xFF).toByte()
+            }
+            sendBytes(packet)
+            kotlinx.coroutines.delay(20)
+        }
+    }
+
+    /**
      * Gửi toàn bộ 4 Ô lên đèn và chuyển sang Chế độ 11
      */
     suspend fun sendAllFourSlots(slots: List<com.esp32.ledmatrix360.model.SlotBitmapState>) {
@@ -391,18 +412,16 @@ class BleManager(private val context: Context) {
             return
         }
         for (slotState in slots) {
-            val (r, g, b) = slotState.getDominantColor()
-            val rows = slotState.to1BitBitmap()
-            sendSlotBitmap(slotState.id, r, g, b, rows)
+            sendSlotRGB565(slotState.id, slotState.pixels)
             kotlinx.coroutines.delay(25)
         }
         kotlinx.coroutines.delay(50)
         setEffect(11) // Bật Chế độ 11: 4-Slot Custom Display
-        log("-> Đã kích hoạt Mode 11 (Hiển thị 4 Ô Bitmap trên đèn)")
+        log("-> Đã kích hoạt Mode 11 (Hiển thị 4 Ô Bitmap RGB565 đa sắc trên đèn)")
     }
 
     /**
-     * Gửi toàn bộ khung vẽ 32x8 lên đèn bằng cách chia thành 4 Ô 8x8
+     * Gửi toàn bộ khung vẽ 32x8 lên đèn bằng cách chia thành 4 Ô 8x8 qua Frame 0x07 RGB565
      */
     suspend fun sendFullCanvas32x8(canvasState: PixelCanvasState) {
         if (!_isConnected.value) {
@@ -412,36 +431,18 @@ class BleManager(private val context: Context) {
         for (slotIdx in 0 until 4) {
             val slotNum = slotIdx + 1
             val startX = slotIdx * 8
-            val rows = ByteArray(8)
-            var sumR = 0
-            var sumG = 0
-            var sumB = 0
-            var count = 0
-
+            val slotPixels = ArrayList<Int>(64)
             for (y in 0 until 8) {
-                var rowByte = 0
                 for (x in 0 until 8) {
-                    val c = canvasState.getPixel(startX + x, y)
-                    if (c != android.graphics.Color.BLACK) {
-                        rowByte = rowByte or (1 shl (7 - x))
-                        sumR += android.graphics.Color.red(c)
-                        sumG += android.graphics.Color.green(c)
-                        sumB += android.graphics.Color.blue(c)
-                        count++
-                    }
+                    slotPixels.add(canvasState.getPixel(startX + x, y))
                 }
-                rows[y] = rowByte.toByte()
             }
-
-            val r = if (count > 0) sumR / count else 0
-            val g = if (count > 0) sumG / count else 220
-            val b = if (count > 0) sumB / count else 255
-            sendSlotBitmap(slotNum, r, g, b, rows)
+            sendSlotRGB565(slotNum, slotPixels)
             kotlinx.coroutines.delay(25)
         }
         kotlinx.coroutines.delay(50)
         setEffect(11)
-        log("-> Đã gửi toàn bộ Canvas 32x8 lên đèn thành công!")
+        log("-> Đã gửi toàn bộ Canvas 32x8 đa sắc RGB565 lên đèn thành công!")
     }
 
 

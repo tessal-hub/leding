@@ -211,7 +211,10 @@ object LampConstants {
         LampMode(9, "Tắt đèn", "💤", "Standby ngủ đông"),
         LampMode(10, "Màu tĩnh", "🎨", "Màu tùy chọn từ bảng màu"),
         LampMode(11, "4 Ô Bitmap", "🖼️", "Tùy biến 4 ô riêng biệt theo 4 mặt"),
-        LampMode(12, "Đồng hồ 360°", "⏰", "Đồng hồ số để bàn & thời gian thực")
+        LampMode(12, "Đồng hồ 360°", "⏰", "Đồng hồ số để bàn & thời gian thực"),
+        LampMode(13, "Nhịp đập trái tim", "💓", "Hiệu ứng nhịp tim đập lãng mạn tình yêu"),
+        LampMode(14, "Sóng tình yêu", "💖", "Sóng lan tỏa mơ mộng"),
+        LampMode(15, "Thời tiết 360°", "🌦️", "Cảnh thời tiết sống động ngày/đêm")
     )
 
     val SMART_ROUTINES_DEFAULT = SmartRoutineConfig()

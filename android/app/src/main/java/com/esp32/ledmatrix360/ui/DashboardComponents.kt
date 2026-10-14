@@ -34,7 +34,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -470,6 +469,9 @@ fun getModeVectorIcon(modeId: Int): ImageVector {
         10 -> Icons.Filled.ColorLens
         11 -> Icons.Filled.GridOn
         12 -> Icons.Filled.AccessTime
+        13 -> Icons.Filled.Favorite
+        14 -> Icons.Filled.FavoriteBorder
+        15 -> Icons.Filled.WbSunny
         else -> Icons.Filled.Lightbulb
     }
 }
@@ -905,7 +907,9 @@ fun MarqueeSection(
         )
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             listOf(
@@ -1007,50 +1011,22 @@ fun PixelArtCanvasSection(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Mode switch pills
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer,
+        // Mode switch — M3 segmented control (role semantics built-in)
+        SingleChoiceSegmentedButtonRow(
             modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier.padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (canvasModeTab == 0) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { canvasModeTab = 0 }
-                ) {
-                    Text(
-                        text = "4 Mặt Độc Lập (8x8)",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (canvasModeTab == 0) FontWeight.Bold else FontWeight.Normal,
-                        color = if (canvasModeTab == 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 10.dp),
-                        textAlign = TextAlign.Center
-                    )
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (canvasModeTab == 1) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { canvasModeTab = 1 }
-                ) {
-                    Text(
-                        text = "Canvas 32x8 Toàn Cảnh",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (canvasModeTab == 1) FontWeight.Bold else FontWeight.Normal,
-                        color = if (canvasModeTab == 1) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 10.dp),
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
+            SegmentedButton(
+                selected = canvasModeTab == 0,
+                onClick = { canvasModeTab = 0 },
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                label = { Text("4 Mặt (8x8)") }
+            )
+            SegmentedButton(
+                selected = canvasModeTab == 1,
+                onClick = { canvasModeTab = 1 },
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                label = { Text("Canvas 32x8") }
+            )
         }
 
         if (canvasModeTab == 0) {
@@ -1929,9 +1905,10 @@ fun DeviceScreen(
     onTriggerPomodoro: () -> Unit,
     onSyncNow: () -> Unit,
     onRequestBatteryOptimization: () -> Unit,
-    onPickFirmwareFile: () -> Unit
+    onPickFirmwareFile: () -> Unit,
+    onShowMessage: (String) -> Unit = {},
+    onShowMessageConnect: (String) -> Unit = {}
 ) {
-    val context = LocalContext.current
     var editingAppConfig by remember { mutableStateOf<AppNotificationConfig?>(null) }
     var showAddAppDialog by remember { mutableStateOf(false) }
 
@@ -1993,7 +1970,7 @@ fun DeviceScreen(
                     FilledTonalButton(
                         onClick = {
                             onTriggerPomodoro()
-                            android.widget.Toast.makeText(context, "Đã gửi lệnh kích hoạt Pomodoro 25p", android.widget.Toast.LENGTH_SHORT).show()
+                            onShowMessage("Đã gửi lệnh kích hoạt Pomodoro 25p")
                         },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
@@ -2006,7 +1983,7 @@ fun DeviceScreen(
                     OutlinedButton(
                         onClick = {
                             onSyncNow()
-                            android.widget.Toast.makeText(context, "Đang đồng bộ Giờ & Thời tiết xuống đèn...", android.widget.Toast.LENGTH_SHORT).show()
+                            onShowMessage("Đang đồng bộ Giờ & Thời tiết xuống đèn...")
                         },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
@@ -2216,10 +2193,10 @@ fun DeviceScreen(
                     OutlinedButton(
                         onClick = {
                             if (!isConnected) {
-                                android.widget.Toast.makeText(context, "Vui lòng kết nối Bluetooth tới đèn trước!", android.widget.Toast.LENGTH_SHORT).show()
+                                onShowMessageConnect("Chưa kết nối đèn — không vào được OTA")
                             } else {
                                 bleManager.sendCommand("ota")
-                                android.widget.Toast.makeText(context, "Đã gửi lệnh vào chế độ OTA", android.widget.Toast.LENGTH_SHORT).show()
+                                onShowMessage("Đã gửi lệnh vào chế độ OTA")
                             }
                         },
                         enabled = progress == null,
@@ -2232,10 +2209,10 @@ fun DeviceScreen(
                     OutlinedButton(
                         onClick = {
                             if (!isConnected) {
-                                android.widget.Toast.makeText(context, "Vui lòng kết nối Bluetooth tới đèn trước!", android.widget.Toast.LENGTH_SHORT).show()
+                                onShowMessageConnect("Chưa kết nối đèn — không hủy được OTA")
                             } else {
                                 bleManager.sendCommand("ota abort")
-                                android.widget.Toast.makeText(context, "Đã gửi lệnh hủy OTA", android.widget.Toast.LENGTH_SHORT).show()
+                                onShowMessage("Đã gửi lệnh hủy OTA")
                             }
                         },
                         enabled = progress == null,
@@ -2249,7 +2226,7 @@ fun DeviceScreen(
                 Button(
                     onClick = {
                         if (!isConnected) {
-                            android.widget.Toast.makeText(context, "Vui lòng kết nối Bluetooth tới đèn trước!", android.widget.Toast.LENGTH_SHORT).show()
+                            onShowMessageConnect("Chưa kết nối đèn — không chọn được firmware")
                         } else {
                             onPickFirmwareFile()
                         }

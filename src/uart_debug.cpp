@@ -230,14 +230,28 @@ bool executeCliCommand(const char* cmdLine) {
   if (strcmp(cmd, "bright") == 0 || strcmp(cmd, "brightness") == 0) {
     if (arg != NULL) {
       int b = atoi(arg);
-      b = constrain(b, MIN_BRIGHTNESS, MAX_BRIGHTNESS);
+      b = constrain(b, 5, 255);
       currentBrightness = b;
-      strip.setBrightness(currentBrightness);
+      strip.setBrightness(toHardwareBrightness(currentBrightness));
       strip.show();
       saveSettingsToFlash();
-      dbgLog(TAG_LED, "Đã đặt độ sáng mới: %d/255 và lưu vào Flash", currentBrightness);
+      dbgLog(TAG_LED, "Đã đặt độ sáng mới: %d/255 (HW: %d) và lưu vào Flash", currentBrightness, toHardwareBrightness(currentBrightness));
     } else {
-      dbgLog(TAG_LED, "Độ sáng hiện tại: %d/255 (Giới hạn: %d -> %d)", currentBrightness, MIN_BRIGHTNESS, MAX_BRIGHTNESS);
+      dbgLog(TAG_LED, "Độ sáng hiện tại: %d/255 (HW: %d)", currentBrightness, toHardwareBrightness(currentBrightness));
+    }
+    return false;
+  }
+
+  // 7b. SPEED <10..100>
+  if (strcmp(cmd, "speed") == 0) {
+    if (arg != NULL) {
+      int s = atoi(arg);
+      s = constrain(s, 10, 100);
+      currentSpeed = s;
+      saveSettingsToFlash();
+      dbgLog(TAG_LED, "Đã đặt tốc độ hiệu ứng mới: %d/100 và lưu vào Flash", currentSpeed);
+    } else {
+      dbgLog(TAG_LED, "Tốc độ hiện tại: %d/100 (10=chậm nhất, 50=chuẩn, 100=nhanh nhất)", currentSpeed);
     }
     return false;
   }
@@ -417,7 +431,7 @@ bool executeCliCommand(const char* cmdLine) {
     if (arg != NULL) {
       int temp = 25, wid = 1;
       if (sscanf(arg, "%d %d", &temp, &wid) >= 1) {
-        triggerWeatherUpdate((int8_t)temp, (uint8_t)wid);
+        triggerWeatherUpdate((int8_t)temp, (uint8_t)wid, true);
         return true;
       }
     }
@@ -507,6 +521,13 @@ bool executeCliCommand(const char* cmdLine) {
     }
     dbgLog(TAG_CLI, "Cú pháp: time <gio> [phut] [giay]  (Ví dụ: time 17 45)");
     return false;
+  }
+
+  // 21. POMO / POMODORO: Kích hoạt đồng hồ Pomodoro 25 phút từ xa qua BLE/UART
+  if (strcmp(cmd, "pomo") == 0 || strcmp(cmd, "pomodoro") == 0) {
+    pendingPomodoroTrigger = true;
+    dbgLog(TAG_FX, "Kích hoạt đồng hồ Pomodoro 25 phút từ lệnh điều khiển!");
+    return true;
   }
 
   // Lệnh không xác định

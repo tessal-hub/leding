@@ -230,7 +230,6 @@ fun MainAppScreen(
     onSyncNow: () -> Unit,
     onPickFirmwareFile: () -> Unit
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
     val isConnected by bleManager.isConnected.collectAsState()
     val isScanning by bleManager.isScanning.collectAsState()
     val telemetry by bleManager.telemetryState.collectAsState()
@@ -245,6 +244,16 @@ fun MainAppScreen(
     var weatherData by remember { mutableStateOf(WeatherData(cityName = selectedCity)) }
     var currentDestination by remember { mutableStateOf(MainDestination.STUDIO) }
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    fun showSnack(msg: String) {
+        scope.launch { snackbarHostState.showSnackbar(msg) }
+    }
+    fun showSnackConnect(msg: String) {
+        scope.launch {
+            val r = snackbarHostState.showSnackbar(msg, actionLabel = "Kết nối")
+            if (r == SnackbarResult.ActionPerformed) onRequestPermissions()
+        }
+    }
 
     // Tự động kéo dữ liệu thời tiết định kỳ (15 phút) và đồng bộ xuống đèn ngay khi kết nối
     LaunchedEffect(selectedCity, isConnected) {
@@ -271,6 +280,7 @@ fun MainAppScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
@@ -391,21 +401,26 @@ fun MainAppScreen(
                             },
                             onSpeedChange = { newSpeed ->
                                 scope.launch { prefsRepository.saveEffectSpeed(newSpeed) }
+                                bleManager.setEffect(
+                                    effectId = telemetry.mode,
+                                    speed = newSpeed,
+                                    brightness = telemetry.brightness
+                                )
                             },
                             onPowerToggle = {
                                 if (telemetry.mode == 9) {
                                     bleManager.setEffect(1, speed = effectSpeed, brightness = telemetry.brightness)
-                                    Toast.makeText(context, "Đã bật đèn (Lửa cuộn 360°)", Toast.LENGTH_SHORT).show()
+                                    showSnack("Đã bật đèn (Lửa cuộn 360°)")
                                 } else {
                                     bleManager.setEffect(9)
-                                    Toast.makeText(context, "Đã chuyển sang chế độ chờ", Toast.LENGTH_SHORT).show()
+                                    showSnack("Đã chuyển sang chế độ chờ")
                                 }
                             },
                             onModeSelect = { modeId ->
                                 bleManager.setEffect(modeId, speed = effectSpeed, brightness = telemetry.brightness)
                                 val modeName = LampConstants.MODES.find { it.id == modeId }?.name ?: "Chế độ $modeId"
                                 if (!isConnected) {
-                                    Toast.makeText(context, "Đã chọn: $modeName (Chưa kết nối)", Toast.LENGTH_SHORT).show()
+                                    showSnackConnect("Đã chọn $modeName — chưa kết nối đèn")
                                 }
                             }
                         )
@@ -417,7 +432,7 @@ fun MainAppScreen(
                             onColorSelected = { r, g, b ->
                                 bleManager.setStaticColor(r, g, b, telemetry.brightness)
                                 if (!isConnected) {
-                                    Toast.makeText(context, "Đã chọn màu RGB($r, $g, $b) (Chưa kết nối)", Toast.LENGTH_SHORT).show()
+                                    showSnackConnect("Đã chọn màu RGB($r, $g, $b) — chưa kết nối đèn")
                                 }
                             },
                             onSendMarqueeText = { text, r, g, b ->
@@ -427,27 +442,31 @@ fun MainAppScreen(
                                     bleManager.sendMarqueeText(text)
                                 }
                                 scope.launch { prefsRepository.saveLastMarquee(text) }
-                                Toast.makeText(context, if (isConnected) "Đã gửi chữ lên đèn: $text" else "Đã lưu chữ: $text (Chưa kết nối)", Toast.LENGTH_SHORT).show()
+                                if (isConnected) showSnack("Đã gửi chữ lên đèn: $text")
+                                else showSnackConnect("Đã lưu chữ: $text — chưa kết nối đèn")
                             },
                             onSendSlot = { slot, r, g, b, rows ->
                                 bleManager.sendSlotBitmap(slot, r, g, b, rows)
-                                Toast.makeText(context, if (isConnected) "Đã gửi Mặt $slot lên đèn" else "Chưa kết nối Bluetooth!", Toast.LENGTH_SHORT).show()
+                                if (isConnected) showSnack("Đã gửi Mặt $slot lên đèn")
+                                else showSnackConnect("Chưa kết nối đèn — không gửi được Mặt $slot")
                             },
                             onSendAllSlots = { slots ->
                                 scope.launch {
                                     bleManager.sendAllFourSlots(slots)
-                                    Toast.makeText(context, if (isConnected) "Đã gửi 4 Mặt lên đèn (Mode 11)" else "Chưa kết nối Bluetooth!", Toast.LENGTH_SHORT).show()
+                                    if (isConnected) showSnack("Đã gửi 4 Mặt lên đèn (Mode 11)")
+                                    else showSnackConnect("Chưa kết nối đèn — không gửi được 4 Mặt")
                                 }
                             },
                             onSendFullCanvas = { fullCanvasState ->
                                 scope.launch {
                                     bleManager.sendFullCanvas32x8(fullCanvasState)
-                                    Toast.makeText(context, if (isConnected) "Đã gửi Canvas 32x8 lên đèn" else "Chưa kết nối Bluetooth!", Toast.LENGTH_SHORT).show()
+                                    if (isConnected) showSnack("Đã gửi Canvas 32x8 lên đèn")
+                                    else showSnackConnect("Chưa kết nối đèn — không gửi được Canvas")
                                 }
                             },
                             onActivateMode11 = {
                                 bleManager.setEffect(11)
-                                Toast.makeText(context, "Đã kích hoạt Chế độ 11: 4 Mặt Tùy chỉnh", Toast.LENGTH_SHORT).show()
+                                showSnack("Đã kích hoạt Chế độ 11: 4 Mặt Tùy chỉnh")
                             }
                         )
                     }
@@ -472,7 +491,7 @@ fun MainAppScreen(
                                     if (bleManager.isConnected.value) {
                                         bleManager.sendWeather(data.temp, data.weatherId)
                                     }
-                                    Toast.makeText(context, "Đã cập nhật: ${data.cityName} ${data.temp}°C (${data.weatherName})", Toast.LENGTH_SHORT).show()
+                                    showSnack("Đã cập nhật: ${data.cityName} ${data.temp}°C (${data.weatherName})")
                                 }
                             },
                             onPreviewModeSelect = { modeId ->
@@ -480,24 +499,28 @@ fun MainAppScreen(
                             },
                             onTriggerSunriseDemo = {
                                 scope.launch {
-                                    Toast.makeText(context, "Bắt đầu chạy thử Bình minh (Demo 10s)...", Toast.LENGTH_SHORT).show()
-                                    bleManager.setStaticColor(140, 25, 0, 8)
+                                    showSnack("Bắt đầu chạy thử Bình minh (Demo 10s)...")
+                                    bleManager.setStaticColor(140, 25, 0, 15)
                                     delay(2000)
-                                    bleManager.setStaticColor(210, 60, 5, 25)
+                                    bleManager.setStaticColor(210, 60, 5, 80)
                                     delay(2000)
-                                    bleManager.setStaticColor(255, 120, 15, 50)
+                                    bleManager.setStaticColor(255, 120, 15, 160)
                                     delay(2000)
-                                    bleManager.setStaticColor(255, 190, 40, 75)
+                                    bleManager.setStaticColor(255, 190, 40, 255)
                                     delay(2000)
                                     bleManager.setEffect(12) // Chuyển sang Mode 12 (Đồng hồ 360°)
-                                    Toast.makeText(context, "Hoàn tất kịch bản thức dậy!", Toast.LENGTH_SHORT).show()
+                                    showSnack("Hoàn tất kịch bản thức dậy!")
                                 }
                             },
                             onActivateBedtimeRoutine = {
                                 scope.launch {
                                     bleManager.setEffect(6) // Mode 6: Night Breathing
-                                    bleManager.sendCommand("bright 10")
-                                    Toast.makeText(context, "Đã bật Đèn ngủ (Mode 6 nhịp thở). Đèn sẽ tự tắt sau ${smartRoutineConfig.bedtimeDurationMin} phút.", Toast.LENGTH_LONG).show()
+                                    bleManager.setBrightness(10)
+                                    showSnack("Đã bật Đèn ngủ (Mode 6). Đèn sẽ tự tắt sau ${smartRoutineConfig.bedtimeDurationMin} phút.")
+                                    delay(smartRoutineConfig.bedtimeDurationMin * 60_000L)
+                                    if (bleManager.isConnected.value && bleManager.telemetryState.value.mode == 6) {
+                                        bleManager.setEffect(9) // Mode 9: Standby / Off
+                                    }
                                 }
                             }
                         )
@@ -532,7 +555,9 @@ fun MainAppScreen(
                             onTriggerPomodoro = { bleManager.triggerPomodoro() },
                             onSyncNow = onSyncNow,
                             onRequestBatteryOptimization = onRequestBatteryOptimization,
-                            onPickFirmwareFile = onPickFirmwareFile
+                            onPickFirmwareFile = onPickFirmwareFile,
+                            onShowMessage = { showSnack(it) },
+                            onShowMessageConnect = { showSnackConnect(it) }
                         )
                     }
                 }

@@ -10,6 +10,7 @@
 // Biến trạng thái toàn cục
 bool mpuFound = false;
 uint8_t currentBrightness = DEFAULT_BRIGHTNESS;
+uint8_t currentSpeed = 50;
 volatile uint8_t currentMode = 0;
 
 ChargeState currentChargeState = DISCHARGING;
@@ -217,28 +218,33 @@ void saveSettingsToFlash() {
   prefs.begin("matrix_cfg", false);
   prefs.putUChar("brightness", currentBrightness);
   prefs.putUChar("mode", currentMode);
+  prefs.putUChar("speed", currentSpeed);
   prefs.end();
 
-  dbgLog(TAG_FLASH, "ĐÃ LƯU FLASH NVS: Độ sáng = %d/255 | Mode = %d (%s)",
-         currentBrightness, currentMode, getModeName(currentMode));
+  dbgLog(TAG_FLASH, "ĐÃ LƯU FLASH NVS: Độ sáng = %d/255 | Mode = %d (%s) | Speed = %d",
+         currentBrightness, currentMode, getModeName(currentMode), currentSpeed);
 }
 
 void loadSettingsFromFlash() {
   prefs.begin("matrix_cfg", true);
   currentBrightness = prefs.getUChar("brightness", DEFAULT_BRIGHTNESS);
   currentMode = prefs.getUChar("mode", DEFAULT_MODE);
+  currentSpeed = prefs.getUChar("speed", 50);
   prefs.end();
 
-  if (currentBrightness < MIN_BRIGHTNESS || currentBrightness > MAX_BRIGHTNESS) {
-    currentBrightness = DEFAULT_BRIGHTNESS;
+  if (currentBrightness < 5) {
+    currentBrightness = 5;
   }
   if (currentMode >= TOTAL_MODES) {
     currentMode = DEFAULT_MODE;
   }
+  if (currentSpeed < 10 || currentSpeed > 100) {
+    currentSpeed = 50;
+  }
 
   filteredBrightness = (float)currentBrightness;
-  dbgLog(TAG_FLASH, "KHÔI PHỤC FLASH NVS: Độ sáng = %d/255 | Mode = %d (%s)",
-         currentBrightness, currentMode, getModeName(currentMode));
+  dbgLog(TAG_FLASH, "KHÔI PHỤC FLASH NVS: Độ sáng = %d/255 | Mode = %d (%s) | Speed = %d",
+         currentBrightness, currentMode, getModeName(currentMode), currentSpeed);
 }
 
 void initMPU6050() {
@@ -355,16 +361,16 @@ void updateMPUBrightness() {
 #endif
 
     float clampedAngle = constrain(tiltAngle, -45.0f, 45.0f);
-    float targetBrightness = MIN_BRIGHTNESS + ((clampedAngle + 45.0f) / 90.0f) * (MAX_BRIGHTNESS - MIN_BRIGHTNESS);
+    float targetBrightness = 5.0f + ((clampedAngle + 45.0f) / 90.0f) * 250.0f;
 
     filteredBrightness += (targetBrightness - filteredBrightness) * 0.12f;
-    uint8_t newBrightness = (uint8_t)round(filteredBrightness);
+    uint8_t newBrightness = (uint8_t)constrain((int)round(filteredBrightness), 5, 255);
 
-    if (newBrightness != currentBrightness && newBrightness >= MIN_BRIGHTNESS && newBrightness <= MAX_BRIGHTNESS) {
+    if (newBrightness != currentBrightness) {
       currentBrightness = newBrightness;
-      strip.setBrightness(currentBrightness);
+      strip.setBrightness(toHardwareBrightness(currentBrightness));
       strip.show();
-      dbgLog(TAG_MPU, "Nghiêng: %.1f° -> Độ sáng cập nhật: %d/255", clampedAngle, currentBrightness);
+      dbgLog(TAG_MPU, "Nghiêng: %.1f° -> Độ sáng cập nhật: %d/255 (HW: %d)", clampedAngle, currentBrightness, toHardwareBrightness(currentBrightness));
     }
   }
 }
@@ -484,6 +490,9 @@ bool checkButtonAndMPU() {
 
 bool delayWithTouch(uint16_t ms) {
   if (isOtaModeActive) return true;
+  if (!isPomodoroActive && !isEmergencyActive && currentSpeed >= 10 && currentSpeed <= 100 && currentSpeed != 50) {
+    ms = (uint16_t)max(1, (int)round((float)ms * (50.0f / (float)currentSpeed)));
+  }
   unsigned long start = millis();
   ChargeState initCharge = currentChargeState;
   while (millis() - start < ms) {

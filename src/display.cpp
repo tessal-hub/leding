@@ -50,11 +50,11 @@ static void precomputeXyTable() {
 void initDisplay(uint8_t brightness) {
   precomputeXyTable();
   strip.begin();
-  strip.setBrightness(brightness);
+  strip.setBrightness(toHardwareBrightness(brightness));
   strip.clear();
   strip.show();
-  dbgLog(TAG_LED, "Khởi tạo Adafruit_NeoPixel: %d bóng (DIN: GPIO %d, Độ sáng: %d/255) [Look-Up Table: 1 CHU KỲ ĐỌC RAM]",
-         NUM_LEDS, LED_PIN, brightness);
+  dbgLog(TAG_LED, "Khởi tạo Adafruit_NeoPixel: %d bóng (DIN: GPIO %d, Độ sáng: %d/255, HW: %d) [Look-Up Table: 1 CHU KỲ ĐỌC RAM]",
+         NUM_LEDS, LED_PIN, brightness, toHardwareBrightness(brightness));
 }
 
 /**
@@ -146,16 +146,17 @@ void fadeTransition(uint16_t durationMs) {
   if (pix == NULL || nBytes > sizeof(fadeSnap)) return;
   memcpy(fadeSnap, pix, nBytes);
 
+  uint8_t hwBri = toHardwareBrightness(origBrightness);
   for (int step = 6; step >= 0; step--) {
     memcpy(pix, fadeSnap, nBytes);
-    strip.setBrightness((origBrightness * step) / 6);
+    strip.setBrightness((hwBri * step) / 6);
     strip.show();
     delay(stepDelay);
   }
   memcpy(pix, fadeSnap, nBytes); // Trả buffer gốc trước khi clear để lần sau không fade từ data rác
   strip.clear();
   strip.show();
-  strip.setBrightness(origBrightness);
+  strip.setBrightness(hwBri);
 }
 
 // ============================================================================
@@ -377,10 +378,28 @@ void initSlots() {
 
 void setSlotBitmap1Bit(uint8_t slot, uint8_t r, uint8_t g, uint8_t b, const uint8_t* rows) {
   if (slot >= NUM_SLOTS || rows == NULL) return;
-  slotPresetType[slot] = 0; // Bitmap tự vẽ: gỡ preset cũ để renderFourSlotsAnimated() không đè Frame 2 lên
-  uint32_t color = strip.Color(r, g, b);
+  slotPresetType[slot] = 0;
+  slotPresetColor[slot] = strip.Color(r, g, b);
+  uint32_t color = slotPresetColor[slot];
+
+  // Tự động nhận diện nếu bitmap trùng khớp với các preset có hỗ trợ Animation 2-frame
+  struct AnimPresetMap { const uint8_t* bmp; uint8_t typeId; };
+  static const AnimPresetMap animMap[] = {
+    { PRESET_HEART,  5  },
+    { PRESET_STAR,   7  },
+    { PRESET_FIRE,   9  },
+    { PRESET_GHOST,  11 },
+    { PRESET_PACMAN, 12 }
+  };
+  for (const auto& item : animMap) {
+    if (memcmp_P(rows, item.bmp, 8) == 0) {
+      slotPresetType[slot] = item.typeId;
+      break;
+    }
+  }
+
   for (uint8_t y = 0; y < 8; y++) {
-    uint8_t rowVal = rows[y];
+    uint8_t rowVal = pgm_read_byte(&rows[y]);
     for (uint8_t x = 0; x < 8; x++) {
       bool on = (rowVal >> (7 - x)) & 0x01;
       slotPixels[slot][y * 8 + x] = on ? color : 0;

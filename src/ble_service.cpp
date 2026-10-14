@@ -200,12 +200,13 @@ void bleSendTelemetry(bool force) {
     }
   }
 
-  char teleJson[220];
+  char teleJson[230];
   snprintf(teleJson, sizeof(teleJson),
-           "{\"m\":%d,\"mn\":\"%s\",\"b\":%d,\"pwr\":%d,\"vbus\":%d,\"stat\":%u,\"pitch\":%.1f,\"roll\":%.1f,\"heap\":%u}",
+           "{\"m\":%d,\"mn\":\"%s\",\"b\":%d,\"sp\":%d,\"pwr\":%d,\"vbus\":%d,\"stat\":%u,\"pitch\":%.1f,\"roll\":%.1f,\"heap\":%u}",
            currentMode,
            getModeName(currentMode),
            currentBrightness,
+           currentSpeed,
            (int)currentChargeState,
            isVbusPlugged() ? 1 : 0,
            getStatPinMilliVolts(),
@@ -246,13 +247,14 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
           uint8_t g = (uint8_t)raw[2];
           uint8_t b = (uint8_t)raw[3];
           if (raw.length() >= 5 && (uint8_t)raw[4] > 0) {
-            currentBrightness = constrain((uint8_t)raw[4], (uint8_t)MIN_BRIGHTNESS, (uint8_t)MAX_BRIGHTNESS);
-            strip.setBrightness(currentBrightness);
+            currentBrightness = constrain((uint8_t)raw[4], (uint8_t)5, (uint8_t)255);
+            strip.setBrightness(toHardwareBrightness(currentBrightness));
           }
           setCustomStaticColor(r, g, b);
           currentMode = 10;
           markSettingsChanged();
-          dbgLog(TAG_BLE, "Binary 0x01: Đổi màu tĩnh RGB(%d, %d, %d), Bright: %d", r, g, b, currentBrightness);
+          dbgLog(TAG_BLE, "Binary 0x01: Đổi màu tĩnh RGB(%d, %d, %d), Bright: %d (HW: %d)",
+                 r, g, b, currentBrightness, toHardwareBrightness(currentBrightness));
           needInterrupt = true;
         }
         break;
@@ -267,12 +269,16 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
             currentMode = m;
             needInterrupt = true;
           }
+          if (raw.length() >= 3 && (uint8_t)raw[2] >= 10 && (uint8_t)raw[2] <= 100) {
+            currentSpeed = (uint8_t)raw[2];
+          }
           if (raw.length() >= 4 && (uint8_t)raw[3] > 0) {
-            currentBrightness = constrain((uint8_t)raw[3], (uint8_t)MIN_BRIGHTNESS, (uint8_t)MAX_BRIGHTNESS);
-            strip.setBrightness(currentBrightness);
+            currentBrightness = constrain((uint8_t)raw[3], (uint8_t)5, (uint8_t)255);
+            strip.setBrightness(toHardwareBrightness(currentBrightness));
           }
           markSettingsChanged();
-          dbgLog(TAG_BLE, "Binary 0x02: Chọn Mode [%d] %s", currentMode, getModeName(currentMode));
+          dbgLog(TAG_BLE, "Binary 0x02: Chọn Mode [%d] %s | Speed: %d | Bright: %d (HW: %d)",
+                 currentMode, getModeName(currentMode), currentSpeed, currentBrightness, toHardwareBrightness(currentBrightness));
         }
         break;
       }
@@ -288,13 +294,16 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
         }
         break;
       }
-      case 0x04: { // Weather Data: [0x04, Temp_Signed, Weather_ID]
+      case 0x04: { // Weather Data: [0x04, Temp_Signed, Weather_ID, Optional_ForceShow]
         if (raw.length() >= 3) {
           int8_t temp = (int8_t)raw[1];
           uint8_t wId = (uint8_t)raw[2];
-          dbgLog(TAG_BLE, "Nhận Frame 0x04 Thời Tiết: %d°C | ID: %d", temp, wId);
-          triggerWeatherUpdate(temp, wId);
-          needInterrupt = true;
+          bool forceShow = (raw.length() >= 4 && (uint8_t)raw[3] == 1);
+          dbgLog(TAG_BLE, "Nhận Frame 0x04 Thời Tiết: %d°C | ID: %d | ForceShow: %d", temp, wId, forceShow);
+          triggerWeatherUpdate(temp, wId, forceShow);
+          if (forceShow || currentMode == 15) {
+            needInterrupt = true;
+          }
         }
         break;
       }
@@ -460,8 +469,8 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
     if (posB == std::string::npos) posB = cmd.find("\"bri\":");
     if (posB != std::string::npos) {
       int b = jsonIntAfterKey(cmd, posB);
-      currentBrightness = constrain((uint8_t)b, (uint8_t)MIN_BRIGHTNESS, (uint8_t)MAX_BRIGHTNESS);
-      strip.setBrightness(currentBrightness);
+      currentBrightness = constrain((uint8_t)b, (uint8_t)5, (uint8_t)255);
+      strip.setBrightness(toHardwareBrightness(currentBrightness));
       strip.show();
       markSettingsChanged();
     }
@@ -518,7 +527,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
       if (posTemp != std::string::npos) {
         temp = jsonIntAfterKey(cmd, posTemp);
       }
-      triggerWeatherUpdate((int8_t)temp, (uint8_t)wId);
+      triggerWeatherUpdate((int8_t)temp, (uint8_t)wId, true);
       needInterrupt = true;
     }
 

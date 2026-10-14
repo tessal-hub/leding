@@ -70,7 +70,7 @@ void effectPomodoro(uint32_t workDurationMs = POMODORO_WORK_MS);
 void effectEmergencyFlashlight(uint32_t durationMs = EMERGENCY_TIMEOUT_MS);
 
 // Cập nhật thông báo thời tiết từ App (Frame 0x04)
-void triggerWeatherUpdate(int8_t temp, uint8_t weatherId);
+void triggerWeatherUpdate(int8_t temp, uint8_t weatherId, bool showBannerAndSwitchMode = false);
 
 // Mode 15: Thời tiết sống động 360° theo giờ Ngày/Đêm (Live Weather Scene)
 void effectWeatherClearSky(uint32_t durationMs = 60000); // ID 1: Nắng (Ngày) / Trăng Sao (Đêm)

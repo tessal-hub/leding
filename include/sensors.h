@@ -5,7 +5,14 @@
 // Biến trạng thái toàn cục của cảm biến
 extern bool mpuFound;
 extern uint8_t currentBrightness;
+extern uint8_t currentSpeed;
 extern volatile uint8_t currentMode;
+
+// Hàm ánh xạ độ sáng giao diện (5..255) sang giới hạn dòng phần cứng an toàn (5..MAX_BRIGHTNESS)
+static inline uint8_t toHardwareBrightness(uint8_t uiBri) {
+  uint8_t clamped = constrain(uiBri, (uint8_t)5, (uint8_t)255);
+  return (uint8_t)(MIN_BRIGHTNESS + ((uint32_t)(clamped - 5) * (MAX_BRIGHTNESS - MIN_BRIGHTNESS)) / 250);
+}
 
 // ============================================================================
 // TRẠNG THÁI SẠC PIN IP2312 (VBUS GPIO 32 + CATHODE LED ĐỎ GPIO 33)

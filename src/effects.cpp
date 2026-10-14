@@ -563,14 +563,15 @@ void triggerNotificationFlash(uint8_t r, uint8_t g, uint8_t b, uint8_t count, ui
 // ĐỒNG HỒ POMODORO VẬT LÝ (25 PHÚT TẬP TRUNG, DẢI SÁNG HẠ DẦN TỪ ĐỈNH XUỐNG ĐÁY)
 // ============================================================================
 void effectPomodoro(uint32_t workDurationMs) {
-  dbgLog(TAG_FX, "BẮT ĐẦU POMODORO 25 PHÚT: Lật hộp sang mặt làm việc!");
+  bool startedByTilt = checkPomodoroOrientation();
+  dbgLog(TAG_FX, "BẮT ĐẦU POMODORO 25 PHÚT (%s)!", startedByTilt ? "Lật hộp vật lý" : "Điều khiển từ App/CLI");
   unsigned long start = millis();
   const uint32_t cWork = strip.Color(255, 120, 20); // Cam ấm tập trung
   const uint32_t cTop  = strip.Color(255, 220, 100);
 
   while (millis() - start < workDurationMs) {
-    // Nếu người dùng dựng đứng hộp lại hoặc đổi mặt -> Hủy Pomodoro
-    if (!checkPomodoroOrientation()) {
+    // Chỉ tự hủy khi dựng đứng hộp nếu ban đầu Pomodoro được kích hoạt bằng cử chỉ lật hộp
+    if (startedByTilt && !checkPomodoroOrientation()) {
       dbgLog(TAG_FX, "Hủy Pomodoro: Hộp đã được dựng đứng lại!");
       return;
     }
@@ -598,7 +599,7 @@ void effectPomodoro(uint32_t workDurationMs) {
   const uint32_t cBreak = strip.Color(230, 40, 40);
 
   while (millis() - breakStart < POMODORO_BREAK_MS) {
-    if (!checkPomodoroOrientation()) return;
+    if (startedByTilt && !checkPomodoroOrientation()) return;
 
     float t = (millis() - breakStart) * 0.003f;
     float breath = 0.15f + 0.85f * sin01(t);
@@ -643,7 +644,7 @@ void effectEmergencyFlashlight(uint32_t durationMs) {
   }
 
   // Khôi phục độ sáng hiện hành (currentBrightness đã cập nhật nếu user đổi sáng giữa chừng)
-  strip.setBrightness(currentBrightness);
+  strip.setBrightness(toHardwareBrightness(currentBrightness));
   strip.show();
 }
 
@@ -1121,9 +1122,14 @@ void effectWeatherLive(uint32_t durationMs) {
 // ----------------------------------------------------------------------------
 // 6. CẬP NHẬT THỜI TIẾT TỪ APP / CLI & CHUYỂN VÀO CHẾ ĐỘ THỜI TIẾT SỐNG ĐỘNG
 // ----------------------------------------------------------------------------
-void triggerWeatherUpdate(int8_t temp, uint8_t weatherId) {
+void triggerWeatherUpdate(int8_t temp, uint8_t weatherId, bool showBannerAndSwitchMode) {
   currentWeatherTemp = temp;
   currentWeatherId   = (weatherId >= 1 && weatherId <= 4) ? weatherId : 1;
+
+  if (!showBannerAndSwitchMode) {
+    dbgLog(TAG_FX, "Cập nhật dữ liệu thời tiết ngầm: %d°C (ID: %d)", temp, currentWeatherId);
+    return;
+  }
 
   SkyTimePalette sky = computeSkyPalette();
   bool isNight = (sky.dayFactor < 0.35f);

@@ -11,6 +11,9 @@ import com.esp32.ledmatrix360.MainActivity
 import com.esp32.ledmatrix360.ble.BleManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
+import androidx.core.content.ContextCompat
+import android.content.pm.PackageManager
 
 /**
  * Foreground Service duy trì kết nối BLE liên tục (Android 14+ connectedDevice)
@@ -25,7 +28,21 @@ class BleForegroundService : Service() {
         const val CHANNEL_ID = "ble_service_channel"
         const val NOTIFICATION_ID = 1001
 
+        fun hasBlePermissions(context: Context): Boolean {
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                ContextCompat.checkSelfPermission(
+                    context, android.Manifest.permission.BLUETOOTH_CONNECT
+                ) == PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(
+                    context, android.Manifest.permission.BLUETOOTH_SCAN
+                ) == PackageManager.PERMISSION_GRANTED
+            } else {
+                true
+            }
+        }
+
         fun startService(context: Context) {
+            if (!hasBlePermissions(context)) return
             val intent = Intent(context, BleForegroundService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -59,6 +76,51 @@ class BleForegroundService : Service() {
                         bleManager.startScan()
                     }
                 }
+            }
+        }
+
+        // Vòng lặp kiểm tra kịch bản Báo thức bình minh & Đèn ngủ tự động mỗi 30 giây
+        serviceScope.launch {
+            val prefs = com.esp32.ledmatrix360.data.PreferencesRepository.getInstance(applicationContext)
+            var lastTriggeredKey = ""
+            while (isActive) {
+                if (bleManager.isConnected.value) {
+                    val cfg = prefs.smartRoutinesFlow.first()
+                    val cal = java.util.Calendar.getInstance()
+                    val curH = cal.get(java.util.Calendar.HOUR_OF_DAY)
+                    val curM = cal.get(java.util.Calendar.MINUTE)
+                    val dayKey = "${cal.get(java.util.Calendar.DAY_OF_YEAR)}_$curH:$curM"
+
+                    if (cfg.sunriseEnabled && curH == cfg.sunriseHour && curM == cfg.sunriseMinute && lastTriggeredKey != "sun_$dayKey") {
+                        lastTriggeredKey = "sun_$dayKey"
+                        launch {
+                            val steps = 4
+                            val stepDelay = (cfg.sunriseDurationMin * 60_000L) / steps
+                            bleManager.setStaticColor(140, 25, 0, 15)
+                            delay(stepDelay)
+                            bleManager.setStaticColor(210, 60, 5, 80)
+                            delay(stepDelay)
+                            bleManager.setStaticColor(255, 120, 15, 160)
+                            delay(stepDelay)
+                            bleManager.setStaticColor(255, 190, 40, 255)
+                            delay(stepDelay)
+                            bleManager.setEffect(12)
+                        }
+                    }
+
+                    if (cfg.bedtimeEnabled && curH == cfg.bedtimeHour && curM == cfg.bedtimeMinute && lastTriggeredKey != "bed_$dayKey") {
+                        lastTriggeredKey = "bed_$dayKey"
+                        launch {
+                            bleManager.setEffect(6)
+                            bleManager.setBrightness(10)
+                            delay(cfg.bedtimeDurationMin * 60_000L)
+                            if (bleManager.telemetryState.value.mode == 6) {
+                                bleManager.setEffect(9)
+                            }
+                        }
+                    }
+                }
+                delay(30_000L)
             }
         }
 
