@@ -47,13 +47,123 @@ static void precomputeXyTable() {
   xyTableReady = true;
 }
 
+#include "driver/rmt.h"
+#include "esp_intr_alloc.h"
+
+// ============================================================================
+// BỘ DRIVER RMT PHẦN CỨNG CHUYÊN DỤNG CHO ESP32-C3 (CHỐNG GIẬT / NHÁY MÀU)
+// ============================================================================
+// Khắc phục triệt để lỗi giật màu xanh lục/tím do RMT buffer underflow khi NimBLE
+// hoặc ngắt FreeRTOS ngắt dòng dữ liệu 768 bytes của 256 LED WS2812B.
+#define WS2812_T0H_NS (400)
+#define WS2812_T0L_NS (850)
+#define WS2812_T1H_NS (800)
+#define WS2812_T1L_NS (450)
+
+static uint32_t t0h_ticks = 0;
+static uint32_t t0l_ticks = 0;
+static uint32_t t1h_ticks = 0;
+static uint32_t t1l_ticks = 0;
+static bool rmtDriverReady = false;
+
+static void IRAM_ATTR ws2812_rmt_adapter(const void *src, rmt_item32_t *dest, size_t src_size,
+                                         size_t wanted_num, size_t *translated_size, size_t *item_num) {
+  if (src == NULL || dest == NULL) {
+    *translated_size = 0;
+    *item_num = 0;
+    return;
+  }
+  const rmt_item32_t bit0 = {{{ t0h_ticks, 1, t0l_ticks, 0 }}}; // Logical 0
+  const rmt_item32_t bit1 = {{{ t1h_ticks, 1, t1l_ticks, 0 }}}; // Logical 1
+  size_t size = 0;
+  size_t num = 0;
+  uint8_t *psrc = (uint8_t *)src;
+  rmt_item32_t *pdest = dest;
+  while (size < src_size && num < wanted_num) {
+    uint8_t b = *psrc;
+    for (int i = 0; i < 8; i++) {
+      pdest->val = (b & (1 << (7 - i))) ? bit1.val : bit0.val;
+      num++;
+      pdest++;
+    }
+    size++;
+    psrc++;
+  }
+  *translated_size = size;
+  *item_num = num;
+}
+
+static void initRmtDriver() {
+  if (rmtDriverReady) return;
+
+  rmt_config_t config = RMT_DEFAULT_CONFIG_TX((gpio_num_t)LED_PIN, RMT_CHANNEL_0);
+  config.clk_div = 2;
+  config.mem_block_num = 2; // Cấp phát trọn vẹn 2 khối RAM RMT (96 items) cho Channel 0 trên ESP32-C3
+  config.tx_config.idle_level = RMT_IDLE_LEVEL_LOW;
+  config.tx_config.idle_output_en = true;
+
+  if (rmt_config(&config) != ESP_OK) {
+    config.mem_block_num = 1;
+    rmt_config(&config);
+  }
+
+  // Cài đặt ngắt trong IRAM mức cao (Level 3) để BLE/FreeRTOS không bao giờ làm gián đoạn dòng bit
+  esp_err_t err = rmt_driver_install(RMT_CHANNEL_0, 0, ESP_INTR_FLAG_IRAM | ESP_INTR_FLAG_LEVEL3);
+  if (err != ESP_OK) {
+    rmt_driver_install(RMT_CHANNEL_0, 0, ESP_INTR_FLAG_IRAM);
+  }
+
+  uint32_t counter_clk_hz = 0;
+  rmt_get_counter_clock(RMT_CHANNEL_0, &counter_clk_hz);
+  float ratio = (float)counter_clk_hz / 1e9f;
+
+  t0h_ticks = (uint32_t)(ratio * WS2812_T0H_NS);
+  t0l_ticks = (uint32_t)(ratio * WS2812_T0L_NS);
+  t1h_ticks = (uint32_t)(ratio * WS2812_T1H_NS);
+  t1l_ticks = (uint32_t)(ratio * WS2812_T1L_NS);
+
+  rmt_translator_init(RMT_CHANNEL_0, ws2812_rmt_adapter);
+
+  // Tăng cường độ dòng output của chân GPIO 6 lên mức cực đại (40mA) để cạnh xung 3.3V sắc nét
+  gpio_set_drive_capability((gpio_num_t)LED_PIN, GPIO_DRIVE_CAP_3);
+  gpio_set_direction((gpio_num_t)LED_PIN, GPIO_MODE_OUTPUT);
+  gpio_set_level((gpio_num_t)LED_PIN, 0);
+
+  rmtDriverReady = true;
+}
+
+void showDisplay() {
+  uint8_t *pixels = strip.getPixels();
+  if (!pixels) return;
+  uint32_t numBytes = strip.numPixels() * 3;
+
+  if (!rmtDriverReady) initRmtDriver();
+
+  // Đảm bảo khoảng nghỉ Latch tối thiểu 350 microgiây giữa 2 khung hình để IC WS2812 chốt dữ liệu chuẩn
+  static uint32_t lastShowUs = 0;
+  uint32_t nowUs = micros();
+  uint32_t elapsed = nowUs - lastShowUs;
+  if (elapsed < 350) {
+    delayMicroseconds(350 - elapsed);
+  }
+
+  // Phát toàn bộ khung hình qua kênh RMT chuyên dụng với ISR trong IRAM
+  rmt_write_sample(RMT_CHANNEL_0, pixels, (size_t)numBytes, true);
+  rmt_wait_tx_done(RMT_CHANNEL_0, pdMS_TO_TICKS(100));
+
+  // Giữ mức LOW chốt dữ liệu
+  gpio_set_level((gpio_num_t)LED_PIN, 0);
+  lastShowUs = micros();
+}
+
 void initDisplay(uint8_t brightness) {
   precomputeXyTable();
   strip.begin();
+  initRmtDriver();
   strip.setBrightness(toHardwareBrightness(brightness));
   strip.clear();
-  strip.show();
-  dbgLog(TAG_LED, "Khởi tạo Adafruit_NeoPixel: %d bóng (DIN: GPIO %d, Độ sáng: %d/255, HW: %d) [Look-Up Table: 1 CHU KỲ ĐỌC RAM]",
+  showDisplay();
+  dbgLog(TAG_LED, "Khởi tạo Adafruit_NeoPixel: %d bóng (DIN: GPIO %d, Độ sáng: %d/255, HW: %d) [RMT Driver IRAM Ready]",
          NUM_LEDS, LED_PIN, brightness, toHardwareBrightness(brightness));
 }
 
@@ -76,7 +186,7 @@ void setPixelXY(int16_t x, int16_t y, uint32_t color) {
 
 void clearMatrix() {
   strip.clear();
-  strip.show();
+  showDisplay();
 }
 
 // Bảng tra cứu trước hàm Sin8 (256 bytes) cho 1 CPU Cycle (0..255 -> 0..255)
@@ -149,12 +259,12 @@ void fadeTransition(uint16_t durationMs) {
   for (int step = 6; step >= 0; step--) {
     memcpy(pix, fadeSnap, nBytes);
     strip.setBrightness((hwBri * step) / 6);
-    strip.show();
+    showDisplay();
     delay(stepDelay);
   }
   memcpy(pix, fadeSnap, nBytes); // Trả buffer gốc trước khi clear để lần sau không fade từ data rác
   strip.clear();
-  strip.show();
+  showDisplay();
   strip.setBrightness(hwBri); // Khôi phục đúng độ sáng phần cứng ban đầu
 }
 
@@ -279,7 +389,7 @@ void displayOtaProgress(uint8_t percent, bool error) {
       }
     }
   }
-  strip.show();
+  showDisplay();
 }
 
 // ============================================================================

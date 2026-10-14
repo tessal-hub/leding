@@ -15,6 +15,10 @@ static inline uint8_t toHardwareBrightness(uint8_t uiBri) {
 // Khởi tạo hiển thị
 void initDisplay(uint8_t brightness);
 
+// Phát dữ liệu ra ma trận LED qua driver RMT chống giật màu, tối ưu cho ESP32-C3
+void showDisplay();
+#define strip_show() showDisplay()
+
 // Chuyển đổi tọa độ 2D hình trụ (x, y) sang chỉ số LED trong chuỗi 256 bóng
 uint16_t XY(int16_t x, int16_t y);
 

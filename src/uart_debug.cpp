@@ -238,7 +238,7 @@ bool executeCliCommand(const char* cmdLine) {
       b = constrain(b, 5, 255);
       currentBrightness = b;
       strip.setBrightness(toHardwareBrightness(currentBrightness));
-      strip.show();
+      showDisplay();
       markSettingsChanged(); // Không ghi Flash trực tiếp mỗi 100ms khi kéo slider
       dbgLog(TAG_LED, "Đã đặt độ sáng mới: %d/255 (HW: %d)", currentBrightness, toHardwareBrightness(currentBrightness));
     } else {
@@ -357,7 +357,7 @@ bool executeCliCommand(const char* cmdLine) {
     if (sscanf(arg, "%d %d %d %d %d", &x, &y, &r, &g, &b) == 5) {
       if (x >= 0 && x < MATRIX_WIDTH && y >= 0 && y < MATRIX_HEIGHT) {
         setPixelXY(x, y, strip.Color(r, g, b));
-        strip.show();
+        showDisplay();
         dbgLog(TAG_LED, "Đã sáng LED tại tọa độ (%d, %d) màu RGB(%d, %d, %d)", x, y, r, g, b);
         return false;
       } else {
@@ -378,7 +378,7 @@ bool executeCliCommand(const char* cmdLine) {
           setPixelXY(x, y, strip.Color(r, g, b));
         }
       }
-      strip.show();
+      showDisplay();
       dbgLog(TAG_LED, "Đã tô toàn bộ 256 LED với màu RGB(%d, %d, %d)", r, g, b);
       return false;
     } else {
@@ -461,7 +461,7 @@ bool executeCliCommand(const char* cmdLine) {
         currentMode = 11;
         saveSettingsToFlash();
         renderFourSlotsToMatrix();
-        strip.show();
+        showDisplay();
         dbgLog(TAG_CLI, "Chuyển sang Chế độ hiển thị 4 Ô Bitmap (Mode 11)");
         return true;
       }
@@ -503,7 +503,7 @@ bool executeCliCommand(const char* cmdLine) {
           currentMode = 11;
           markSettingsChanged();
           renderFourSlotsToMatrix();
-          strip.show();
+          showDisplay();
           markSlotsDirty();
           return true;
         }
