@@ -331,7 +331,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
             setSlotBitmap1Bit(slot, r, g, b, rows);
             currentMode = 11;
             renderFourSlotsToMatrix();
-            showDisplay();
+            strip.show();
             markSlotsDirty();
             dbgLog(TAG_BLE, "Binary 0x06: Cập nhật Ô %d (Mặt %d) Bitmap 8x8 RGB(%d, %d, %d)",
                    slot + 1, slot + 1, r, g, b);
@@ -349,7 +349,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
             setSlotPixelsRGB565(slot, chunkIdx, (const uint8_t*)raw.data() + 3, raw.length() - 3);
             currentMode = 11;
             renderFourSlotsToMatrix();
-            showDisplay();
+            strip.show();
             markSlotsDirty();
             dbgLog(TAG_BLE, "Binary 0x07: Nạp Chunk RGB %d cho Ô %d", chunkIdx, slot + 1);
             needInterrupt = true;
@@ -473,7 +473,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
       int b = jsonIntAfterKey(cmd, posB);
       currentBrightness = constrain((uint8_t)b, (uint8_t)5, (uint8_t)255);
       strip.setBrightness(toHardwareBrightness(currentBrightness));
-      showDisplay();
+      strip.show();
       markSettingsChanged();
     }
 
@@ -550,7 +550,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
               applySlotPreset((uint8_t)s, pName.c_str());
               currentMode = 11;
               renderFourSlotsToMatrix();
-              showDisplay();
+              strip.show();
               markSlotsDirty();
               needInterrupt = true;
             }
@@ -560,7 +560,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
           clearSlot((uint8_t)s);
           currentMode = 11;
           renderFourSlotsToMatrix();
-          showDisplay();
+          strip.show();
           markSlotsDirty();
           needInterrupt = true;
         }

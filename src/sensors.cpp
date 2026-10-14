@@ -380,7 +380,7 @@ void updateMPUBrightness() {
     if (newBrightness != currentBrightness) {
       currentBrightness = newBrightness;
       strip.setBrightness(toHardwareBrightness(currentBrightness));
-      showDisplay();
+      strip.show();
       dbgLog(TAG_MPU, "Nghiêng: %.1f° -> Độ sáng cập nhật: %d/255 (HW: %d)", clampedAngle, currentBrightness, toHardwareBrightness(currentBrightness));
     }
   }

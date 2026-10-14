@@ -26,7 +26,7 @@ void effectLedOrderTest(uint16_t stepDelayMs) {
     uint32_t c = (panel == 0) ? strip.Color(90, 0, 0) : (panel == 1) ? strip.Color(0, 90, 0) : (panel == 2) ? strip.Color(0, 0, 90) : strip.Color(90, 90, 0);
     if (i > 0) strip.setPixelColor(i - 1, c);
     strip.setPixelColor(i, strip.Color(255, 255, 255));
-    showDisplay();
+    strip.show();
     if (delayWithTouch(stepDelayMs)) return;
   }
   delayWithTouch(400);
@@ -140,7 +140,7 @@ void effectFaceWave(uint32_t durationMs) {
         setPixelXY(x, y, strip.gamma32(scaleColor(base, constrain(bri * v, 0.0f, 1.0f))));
       }
     }
-    showDisplay();
+    strip.show();
     t += 0.045f;
     if (delayWithTouch(25)) return;
   }
@@ -184,7 +184,7 @@ void effectEdgeLight(uint32_t durationMs) {
         setPixelXY(x, y, strip.gamma32(c));
       }
     }
-    showDisplay();
+    strip.show();
     if (delayWithTouch(25)) return;
   }
 }
@@ -227,7 +227,7 @@ void effectLavaNoise(uint32_t durationMs) {
         setPixelXY(x, y, strip.gamma32(pixelCol));
       }
     }
-    showDisplay();
+    strip.show();
     t += 0.018f;               // Chậm = sang; nhanh = rối
     if (delayWithTouch(25)) return;
   }
@@ -292,7 +292,7 @@ void effectTiltGlow(uint32_t durationMs) {
         setPixelXY(x, y, strip.gamma32(col));
       }
     }
-    showDisplay();
+    strip.show();
     t += 0.05f;
     if (delayWithTouch(20)) return;
   }
@@ -339,7 +339,7 @@ void effectAurora(uint32_t durationMs) {
         setPixelXY(x, y, strip.gamma32(scaleColor(col, bri)));
       }
     }
-    showDisplay();
+    strip.show();
     t += 0.035f;
     if (delayWithTouch(25)) return;
   }
@@ -383,7 +383,7 @@ void effectBreathingGradient(uint32_t durationMs) {
         setPixelXY(x, y, strip.gamma32(scaleColor(lerpColor(cA, cB, g), finalBri)));
       }
     }
-    showDisplay();
+    strip.show();
     if (delayWithTouch(20)) return;
   }
 }
@@ -405,7 +405,7 @@ void effectCylinderScrollText(const char* text, uint32_t color, uint16_t speedDe
         drawCharCylinder(charX, text[i], color);
       }
     }
-    showDisplay();
+    strip.show();
     if (delayWithTouch(speedDelay)) return;
   }
 }
@@ -470,15 +470,11 @@ void effectWaterPhysics(uint32_t durationMs) {
       }
 
       velocity[x] *= 0.93f;
-      velocity[x] = constrain(velocity[x], -2.0f, 2.0f);
     }
 
     for (int x = 0; x < MATRIX_WIDTH; x++) {
       surfaceY[x] += velocity[x];
       surfaceY[x] = constrain(surfaceY[x], 0.6f, 6.8f);
-      if ((surfaceY[x] <= 0.65f && velocity[x] < 0) || (surfaceY[x] >= 6.75f && velocity[x] > 0)) {
-        velocity[x] = -velocity[x] * 0.25f;
-      }
     }
 
     if (jerk > 0.45f) {
@@ -498,18 +494,14 @@ void effectWaterPhysics(uint32_t durationMs) {
 
     for (int x = 0; x < MATRIX_WIDTH; x++) {
       int waterTop = (int)round(surfaceY[x]);
-      if (waterTop < 0) waterTop = 0;
-      if (waterTop >= MATRIX_HEIGHT) waterTop = MATRIX_HEIGHT - 1;
-
       int left = (x - 1 + MATRIX_WIDTH) % MATRIX_WIDTH;
       int right = (x + 1) % MATRIX_WIDTH;
       float slope = surfaceY[right] - surfaceY[left];
-      float specular = sin01(slope * 1.8f + (float)(nowMs & 0xFFFF) * 0.004f);
+      float specular = sin01(slope * 1.8f + nowMs * 0.004f);
 
       for (int y = MATRIX_HEIGHT - 1; y >= waterTop; y--) {
         uint32_t waterColor;
         float depth = (float)(y - waterTop) / (float)(MATRIX_HEIGHT - waterTop + 0.01f);
-        depth = constrain(depth, 0.0f, 1.0f);
 
         if (y == waterTop) {
           if (fabsf(velocity[x]) > 0.15f || jerk > 0.3f) {
@@ -526,7 +518,7 @@ void effectWaterPhysics(uint32_t durationMs) {
           waterColor = lerpColor(strip.Color(0, 115, 230), strip.Color(0, 30, 160), depth);
         }
 
-        setPixelXY(x, y, waterColor);
+        setPixelXY(x, y, strip.gamma32(waterColor));
       }
     }
 
@@ -538,19 +530,15 @@ void effectWaterPhysics(uint32_t durationMs) {
         int dx = (int)round(droplets[d].x);
         int dy = (int)round(droplets[d].y);
 
-        if (dx >= 0 && dx < MATRIX_WIDTH) {
-          if (dy >= 0 && dy < MATRIX_HEIGHT && dy < (int)surfaceY[dx]) {
-            setPixelXY(dx, dy, strip.Color(240, 255, 255));
-          } else if (dy >= (int)surfaceY[dx]) {
-            droplets[d].active = false;
-          }
-        } else {
+        if (dy >= 0 && dy < MATRIX_HEIGHT && dy < (int)surfaceY[dx]) {
+          setPixelXY(dx, dy, strip.gamma32(strip.Color(240, 255, 255)));
+        } else if (dy >= (int)surfaceY[dx]) {
           droplets[d].active = false;
         }
       }
     }
 
-    showDisplay();
+    strip.show();
     if (delayWithTouch(28)) return;
   }
 }
@@ -563,10 +551,10 @@ void triggerNotificationFlash(uint8_t r, uint8_t g, uint8_t b, uint8_t count, ui
   uint32_t col = strip.Color(r, g, b);
   for (uint8_t i = 0; i < count; i++) {
     for (int p = 0; p < NUM_LEDS; p++) strip.setPixelColor(p, col);
-    showDisplay();
+    strip.show();
     delay(delayMs);
     strip.clear();
-    showDisplay();
+    strip.show();
     delay(delayMs);
   }
 }
@@ -601,7 +589,7 @@ void effectPomodoro(uint32_t workDurationMs) {
         }
       }
     }
-    showDisplay();
+    strip.show();
     if (delayWithTouch(200)) return;
   }
 
@@ -619,7 +607,7 @@ void effectPomodoro(uint32_t workDurationMs) {
     for (int i = 0; i < NUM_LEDS; i++) {
       strip.setPixelColor(i, strip.gamma32(scaleColor(cBreak, breath)));
     }
-    showDisplay();
+    strip.show();
     if (delayWithTouch(35)) return;
   }
 }
@@ -634,7 +622,7 @@ void effectEmergencyFlashlight(uint32_t durationMs) {
   for (int i = 0; i < NUM_LEDS; i++) {
     strip.setPixelColor(i, strip.Color(255, 255, 255));
   }
-  showDisplay();
+  strip.show();
 
   unsigned long start = millis();
   unsigned long stationaryStart = 0;
@@ -657,7 +645,7 @@ void effectEmergencyFlashlight(uint32_t durationMs) {
 
   // Khôi phục độ sáng hiện hành (currentBrightness đã cập nhật nếu user đổi sáng giữa chừng)
   strip.setBrightness(toHardwareBrightness(currentBrightness));
-  showDisplay();
+  strip.show();
 }
 
 // ============================================================================
@@ -670,7 +658,7 @@ void effectStaticColor() {
   for (int i = 0; i < NUM_LEDS; i++) {
     strip.setPixelColor(i, col);
   }
-  showDisplay();
+  strip.show();
   delayWithTouch(60);
 }
 
@@ -682,7 +670,7 @@ void effectFourSlotsCustom(uint32_t durationMs) {
   while (millis() - start < durationMs) {
     uint8_t frame = (millis() / 350) % 2;
     renderFourSlotsAnimated(frame);
-    showDisplay();
+    strip.show();
     if (delayWithTouch(60)) return;
   }
 }
@@ -724,7 +712,7 @@ void effectDeskClock(uint32_t durationMs) {
     // Luân phiên: 8s hiện giờ, 2s hiện nhiệt độ đồng bộ từ App
     bool showTemp = ((millis() - start) % 10000) >= 8000;
     renderDeskClock(h, m, colonBlink, currentWeatherTemp, showTemp);
-    showDisplay();
+    strip.show();
     if (delayWithTouch(80)) return;
   }
 }
@@ -871,7 +859,7 @@ void effectWeatherClearSky(uint32_t durationMs) {
         setPixelXY(x, y, strip.gamma32(scaleColor(col, sky.nightBriScale)));
       }
     }
-    showDisplay();
+    strip.show();
     t += 0.035f;
     if (delayWithTouch(25)) return;
   }
@@ -913,7 +901,7 @@ void effectWeatherCloudy(uint32_t durationMs) {
         setPixelXY(x, y, strip.gamma32(scaleColor(finalCol, sky.nightBriScale)));
       }
     }
-    showDisplay();
+    strip.show();
     t += 0.022f;
     if (delayWithTouch(25)) return;
   }
@@ -1008,7 +996,7 @@ void effectWeatherRain(uint32_t durationMs) {
       setPixelXY(x, MATRIX_HEIGHT - 1, strip.gamma32(scaleColor(puddleCol, bri)));
     }
 
-    showDisplay();
+    strip.show();
     t += 0.035f;
     if (delayWithTouch(24)) return;
   }
@@ -1112,7 +1100,7 @@ void effectWeatherStorm(uint32_t durationMs) {
       }
     }
 
-    showDisplay();
+    strip.show();
     t += 0.04f;
     if (delayWithTouch(22)) return;
   }
@@ -1322,7 +1310,7 @@ void effectHeartbeatPulse(uint32_t durationMs) {
       }
     }
 
-    showDisplay();
+    strip.show();
     if (delayWithTouch(28)) return;
   }
 }
@@ -1406,7 +1394,7 @@ void effectLoveRipple(uint32_t durationMs) {
       }
     }
 
-    showDisplay();
+    strip.show();
     if (delayWithTouch(26)) return;
   }
 }
@@ -1431,7 +1419,7 @@ void effectChargingAmber(uint32_t durationMs) {
         setPixelXY(x, y, strip.gamma32(scaleColor(cAmber, breath)));
       }
     }
-    showDisplay();
+    strip.show();
     step++;
     if (delayWithTouch(40)) break;
   }
@@ -1447,7 +1435,7 @@ void effectChargeFullGreen(uint32_t durationMs) {
     for (int i = 0; i < NUM_LEDS; i++) {
       strip.setPixelColor(i, cGreen);
     }
-    showDisplay();
+    strip.show();
     if (delayWithTouch(60)) break;
   }
 }
