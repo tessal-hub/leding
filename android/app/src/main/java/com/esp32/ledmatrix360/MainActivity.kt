@@ -124,7 +124,8 @@ class MainActivity : ComponentActivity() {
                             checkAndRequestPermissions()
                         } else {
                             if (bleManager.isConnected.value) {
-                                Toast.makeText(this@MainActivity, "Đã kết nối với đèn LED Matrix 360", Toast.LENGTH_SHORT).show()
+                                bleManager.disconnect()
+                                Toast.makeText(this@MainActivity, "Đã ngắt kết nối với đèn LED Matrix 360", Toast.LENGTH_SHORT).show()
                             } else if (bleManager.isScanning.value) {
                                 bleManager.stopScan()
                                 Toast.makeText(this@MainActivity, "Đã dừng quét Bluetooth", Toast.LENGTH_SHORT).show()
@@ -514,8 +515,7 @@ fun MainAppScreen(
                             },
                             onActivateBedtimeRoutine = {
                                 scope.launch {
-                                    bleManager.setEffect(6) // Mode 6: Night Breathing
-                                    bleManager.setBrightness(10)
+                                    bleManager.setEffect(6, speed = effectSpeed, brightness = 10)
                                     showSnack("Đã bật Đèn ngủ (Mode 6). Đèn sẽ tự tắt sau ${smartRoutineConfig.bedtimeDurationMin} phút.")
                                     delay(smartRoutineConfig.bedtimeDurationMin * 60_000L)
                                     if (bleManager.isConnected.value && bleManager.telemetryState.value.mode == 6) {

@@ -94,8 +94,10 @@ class BleRxCallbacks: public NimBLECharacteristicCallbacks {
     std::string rxValue = pCharacteristic->getValue();
     if (rxValue.length() > 0) {
       if (bleLock()) {
-        if (bleRxQueue.size() < 40) {
+        if (bleRxQueue.size() < 128) {
           bleRxQueue.push(std::move(rxValue));
+        } else {
+          dbgLog(TAG_BLE, "CẢNH BÁO: Hàng đợi BLE RX đầy (128 gói), bỏ qua gói tin!");
         }
         bleUnlock();
       }
@@ -610,6 +612,13 @@ bool handleBleService() {
 
     if (parseAndExecuteBleCommand(nextCmd)) {
       needInterrupt = true;
+    }
+
+    // Nếu lệnh vừa thực thi kích hoạt OTA (0x10 hoặc CLI "ota"),
+    // lập tức dừng rút queue để thoát ngay khỏi hiệu ứng hiện tại về vòng lặp OTA chính
+    if (isOtaModeActive || otaInProgress) {
+      needInterrupt = true;
+      break;
     }
   }
 

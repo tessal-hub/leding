@@ -215,14 +215,20 @@ void processDeferredSettingsSave() {
 
 void saveSettingsToFlash() {
   isSettingsDirty = false;
+  uint8_t r, g, b;
+  getCustomStaticColor(r, g, b);
+
   prefs.begin("matrix_cfg", false);
   prefs.putUChar("brightness", currentBrightness);
   prefs.putUChar("mode", currentMode);
   prefs.putUChar("speed", currentSpeed);
+  prefs.putUChar("col_r", r);
+  prefs.putUChar("col_g", g);
+  prefs.putUChar("col_b", b);
   prefs.end();
 
-  dbgLog(TAG_FLASH, "ĐÃ LƯU FLASH NVS: Độ sáng = %d/255 | Mode = %d (%s) | Speed = %d",
-         currentBrightness, currentMode, getModeName(currentMode), currentSpeed);
+  dbgLog(TAG_FLASH, "ĐÃ LƯU FLASH NVS: Độ sáng = %d/255 | Mode = %d (%s) | Speed = %d | StaticRGB = (%d,%d,%d)",
+         currentBrightness, currentMode, getModeName(currentMode), currentSpeed, r, g, b);
 }
 
 void loadSettingsFromFlash() {
@@ -230,7 +236,12 @@ void loadSettingsFromFlash() {
   currentBrightness = prefs.getUChar("brightness", DEFAULT_BRIGHTNESS);
   currentMode = prefs.getUChar("mode", DEFAULT_MODE);
   currentSpeed = prefs.getUChar("speed", 50);
+  uint8_t r = prefs.getUChar("col_r", 255);
+  uint8_t g = prefs.getUChar("col_g", 160);
+  uint8_t b = prefs.getUChar("col_b", 60);
   prefs.end();
+
+  setCustomStaticColor(r, g, b);
 
   if (currentBrightness < 5) {
     currentBrightness = 5;
@@ -243,8 +254,8 @@ void loadSettingsFromFlash() {
   }
 
   filteredBrightness = (float)currentBrightness;
-  dbgLog(TAG_FLASH, "KHÔI PHỤC FLASH NVS: Độ sáng = %d/255 | Mode = %d (%s) | Speed = %d",
-         currentBrightness, currentMode, getModeName(currentMode), currentSpeed);
+  dbgLog(TAG_FLASH, "KHÔI PHỤC FLASH NVS: Độ sáng = %d/255 | Mode = %d (%s) | Speed = %d | StaticRGB = (%d,%d,%d)",
+         currentBrightness, currentMode, getModeName(currentMode), currentSpeed, r, g, b);
 }
 
 void initMPU6050() {

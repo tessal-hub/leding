@@ -133,8 +133,8 @@ uint32_t scaleColor(uint32_t c, float k) {
 }
 
 void fadeTransition(uint16_t durationMs) {
-  uint8_t origBrightness = strip.getBrightness();
-  if (origBrightness < 2) return;
+  uint8_t hwBri = strip.getBrightness(); // Giá trị này ĐÃ là độ sáng phần cứng (5..MAX_BRIGHTNESS)
+  if (hwBri < 2) return;
   uint16_t stepDelay = durationMs / 12;
   if (stepDelay < 4) stepDelay = 4;
 
@@ -146,7 +146,6 @@ void fadeTransition(uint16_t durationMs) {
   if (pix == NULL || nBytes > sizeof(fadeSnap)) return;
   memcpy(fadeSnap, pix, nBytes);
 
-  uint8_t hwBri = toHardwareBrightness(origBrightness);
   for (int step = 6; step >= 0; step--) {
     memcpy(pix, fadeSnap, nBytes);
     strip.setBrightness((hwBri * step) / 6);
@@ -156,7 +155,7 @@ void fadeTransition(uint16_t durationMs) {
   memcpy(pix, fadeSnap, nBytes); // Trả buffer gốc trước khi clear để lần sau không fade từ data rác
   strip.clear();
   strip.show();
-  strip.setBrightness(hwBri);
+  strip.setBrightness(hwBri); // Khôi phục đúng độ sáng phần cứng ban đầu
 }
 
 // ============================================================================
@@ -382,16 +381,23 @@ void setSlotBitmap1Bit(uint8_t slot, uint8_t r, uint8_t g, uint8_t b, const uint
   slotPresetColor[slot] = strip.Color(r, g, b);
   uint32_t color = slotPresetColor[slot];
 
-  // Tự động nhận diện nếu bitmap trùng khớp với các preset có hỗ trợ Animation 2-frame
-  struct AnimPresetMap { const uint8_t* bmp; uint8_t typeId; };
-  static const AnimPresetMap animMap[] = {
+  // Nhận diện đầy đủ cả 12 preset (tĩnh + động) để lưu đúng typeId và tránh nhấp nháy shimmer sai
+  struct PresetMap { const uint8_t* bmp; uint8_t typeId; };
+  static const PresetMap presetMap[] = {
+    { PRESET_NUM1,   1  },
+    { PRESET_NUM2,   2  },
+    { PRESET_NUM3,   3  },
+    { PRESET_NUM4,   4  },
     { PRESET_HEART,  5  },
+    { PRESET_SMILE,  6  },
     { PRESET_STAR,   7  },
+    { PRESET_BOLT,   8  },
     { PRESET_FIRE,   9  },
+    { PRESET_MUSIC,  10 },
     { PRESET_GHOST,  11 },
     { PRESET_PACMAN, 12 }
   };
-  for (const auto& item : animMap) {
+  for (const auto& item : presetMap) {
     if (memcmp_P(rows, item.bmp, 8) == 0) {
       slotPresetType[slot] = item.typeId;
       break;
@@ -399,7 +405,7 @@ void setSlotBitmap1Bit(uint8_t slot, uint8_t r, uint8_t g, uint8_t b, const uint
   }
 
   for (uint8_t y = 0; y < 8; y++) {
-    uint8_t rowVal = pgm_read_byte(&rows[y]);
+    uint8_t rowVal = rows[y];
     for (uint8_t x = 0; x < 8; x++) {
       bool on = (rowVal >> (7 - x)) & 0x01;
       slotPixels[slot][y * 8 + x] = on ? color : 0;

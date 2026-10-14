@@ -18,7 +18,7 @@ class LampNotificationListener : NotificationListenerService() {
 
     private val lastNotiTimes = ConcurrentHashMap<String, Long>()
     private val debounceMs = 3000L // Chống spam lặp thông báo trong 3 giây
-    private val serviceScope = CoroutineScope(Dispatchers.IO)
+    private val serviceScope = CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
 
     companion object {
         private const val TAG = "LampNotificationListener"
@@ -76,6 +76,11 @@ class LampNotificationListener : NotificationListenerService() {
                 Log.e(TAG, "Lỗi xử lý màu thông báo: ${e.message}")
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        kotlinx.coroutines.cancel(serviceScope)
     }
 
     private data class NotiFlashPattern(val r: Int, val g: Int, val b: Int, val count: Int)

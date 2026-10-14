@@ -1240,13 +1240,13 @@
           </div>
         </div>
 
-        <!-- THƯ VIỆN 13 CHẾ ĐỘ ÁNH SÁNG CHUẨN M3 -->
+        <!-- THƯ VIỆN 16 CHẾ ĐỘ ÁNH SÁNG CHUẨN M3 -->
         <div class="card-header-row" style="margin-bottom:14px;">
           <div>
-            <h2 style="font-size:1.1rem;font-weight:800;color:#fff;">Thư viện 13 Chế độ</h2>
+            <h2 style="font-size:1.1rem;font-weight:800;color:#fff;">Thư viện 16 Chế độ</h2>
             <p style="font-size:0.8rem;color:var(--md-sys-color-on-surface-variant)">Hiển thị quang học 360° & Chạm để kích hoạt ngay</p>
           </div>
-          <span class="filter-chip" style="cursor:default;">13 Chế độ</span>
+          <span class="filter-chip" style="cursor:default;">16 Chế độ</span>
         </div>
 
         <div class="modes-grid" id="modesContainer">
@@ -2064,39 +2064,45 @@
       }
     }
 
+    // HÀNG ĐỢI TUẦN TỰ PROMISE CHO GATT BLE (CHỐNG MẤT GÓI KHI GỌI ĐỒNG THỜI)
+    let bleWriteQueue = Promise.resolve();
+    let isOtaInProgress = false;
+    let bedtimeDurationMins = 30;
+    let bedtimeTimeoutId = null;
+
+    function enqueueBleWrite(operation) {
+      bleWriteQueue = bleWriteQueue.then(operation).catch(err => {
+        log("Lỗi hàng đợi GATT: " + err.message);
+      });
+      return bleWriteQueue;
+    }
+
     // GỬI LỆNH DẠNG TEXT (VD: bright 100, mode 2)
     async function sendCommand(cmdStr) {
       if (!isConnected || !rxChar) {
         log("[Ngoại tuyến] Mô phỏng lệnh: " + cmdStr);
         return;
       }
-      try {
+      return enqueueBleWrite(async () => {
         const encoder = new TextEncoder();
         const data = encoder.encode(cmdStr + "\n");
         await rxChar.writeValueWithoutResponse(data);
         log("-> Gửi: " + cmdStr);
-      } catch (e) {
-        log("Lỗi gửi lệnh: " + e.message);
-      }
+      });
     }
 
-    // GỬI GÓI TIN NHỊ PHÂN (BINARY GATT FRAMES 0x01..0x06)
-    let isSendingBytes = false;
+    // GỬI GÓI TIN NHỊ PHÂN (BINARY GATT FRAMES 0x01..0x07)
     async function sendBytes(byteArray) {
       if (!isConnected || !rxChar) {
         log("[Ngoại tuyến] Gửi binary frame (" + byteArray.length + " bytes)");
         return;
       }
-      if (isSendingBytes) return;
-      isSendingBytes = true;
-      try {
+      return enqueueBleWrite(async () => {
         await rxChar.writeValueWithoutResponse(byteArray);
-        log("-> Gửi Binary Frame Opcode 0x" + byteArray[0].toString(16).padStart(2, '0').toUpperCase() + " (" + byteArray.length + " bytes)");
-      } catch (e) {
-        log("Lỗi gửi binary: " + e.message);
-      } finally {
-        isSendingBytes = false;
-      }
+        if (byteArray[0] !== 0x11) {
+          log("-> Gửi Binary Frame Opcode 0x" + byteArray[0].toString(16).padStart(2, '0').toUpperCase() + " (" + byteArray.length + " bytes)");
+        }
+      });
     }
 
     // XỬ LÝ TELEMETRY TỪ ESP32 QUA NOTIFY
@@ -2105,6 +2111,26 @@
       const raw = decoder.decode(event.target.value);
       try {
         const d = JSON.parse(raw);
+        if (d.ota !== undefined) {
+          const statusLabel = document.getElementById("otaStatusLabel");
+          const progBar = document.getElementById("otaProgressBar");
+          const progLabel = document.getElementById("otaPercentLabel");
+          if (d.ota === "ready") {
+            showToast("Đèn đã vào chế độ OTA!");
+          } else if (d.ota === "prog" && d.p !== undefined) {
+            if (progBar) progBar.style.width = d.p + "%";
+            if (progLabel) progLabel.innerText = d.p + "%";
+          } else if (d.ota === "success") {
+            if (statusLabel) statusLabel.innerText = "Nạp thành công! Đèn đang khởi động lại...";
+            showToast("ESP32 xác nhận nạp OTA thành công!");
+          } else if (d.ota === "error" || d.ota === "timeout" || d.ota === "aborted") {
+            isOtaInProgress = false;
+            if (statusLabel) statusLabel.innerText = `Lỗi OTA từ đèn: ${d.ota} (Mã: ${d.err ?? -1})`;
+            showToast(`Lỗi OTA: ${d.ota}`, "✕");
+          }
+          return;
+        }
+
         // Mode
         if (d.m !== undefined) {
           currentModeId = d.m;
@@ -2655,6 +2681,18 @@
         if (saved.bedtimeEnabled !== undefined) document.getElementById("switchBedtime").checked = saved.bedtimeEnabled;
         if (saved.autoWeather !== undefined) document.getElementById("switchAutoWeather").checked = saved.autoWeather;
         if (saved.city) document.getElementById("citySelect").value = saved.city;
+        if (saved.timeSunrise) document.getElementById("timeSunrise").value = saved.timeSunrise;
+        if (saved.sunriseDuration) {
+          document.getElementById("sliderSunriseDuration").value = saved.sunriseDuration;
+          document.getElementById("sunriseDurationText").innerText = saved.sunriseDuration + " phút trước";
+        }
+        if (saved.timeBedtime) document.getElementById("timeBedtime").value = saved.timeBedtime;
+        if (saved.bedtimeDurationMins) {
+          bedtimeDurationMins = saved.bedtimeDurationMins;
+          document.querySelectorAll("#bedtimeDurationChips .filter-chip").forEach(b => {
+            b.classList.toggle("active", parseInt(b.innerText) === bedtimeDurationMins);
+          });
+        }
       } catch (e) {}
     }
 
@@ -2663,15 +2701,21 @@
         sunriseEnabled: document.getElementById("switchSunrise").checked,
         bedtimeEnabled: document.getElementById("switchBedtime").checked,
         autoWeather: document.getElementById("switchAutoWeather").checked,
-        city: document.getElementById("citySelect").value
+        city: document.getElementById("citySelect").value,
+        timeSunrise: document.getElementById("timeSunrise").value,
+        sunriseDuration: parseInt(document.getElementById("sliderSunriseDuration").value),
+        timeBedtime: document.getElementById("timeBedtime").value,
+        bedtimeDurationMins: bedtimeDurationMins
       };
       localStorage.setItem("smartRoutines", JSON.stringify(cfg));
       showToast("Đã lưu cài đặt kịch bản");
     }
 
     function setBedtimeDuration(mins, btnEl) {
+      bedtimeDurationMins = mins;
       document.querySelectorAll("#bedtimeDurationChips .filter-chip").forEach(b => b.classList.remove("active"));
       btnEl.classList.add("active");
+      saveRoutineSettings();
     }
 
     async function runSunriseDemo() {
@@ -2689,9 +2733,18 @@
     }
 
     function activateBedtimeRoutine() {
-      selectMode(6); // Mode 6 Night Breathing
-      sendCommand("bright 10");
-      showToast("Đã kích hoạt Đèn ngủ ban đêm (Tự tắt)");
+      currentModeId = 6;
+      currentBrightness = 10;
+      updateModeHighlight(6);
+      // Gửi 1 gói 0x02 duy nhất bao gồm cả Mode 6 và Brightness 10
+      sendBytes(new Uint8Array([0x02, 6, currentSpeed, 10, 0]));
+      if (bedtimeTimeoutId) clearTimeout(bedtimeTimeoutId);
+      bedtimeTimeoutId = setTimeout(() => {
+        if (isConnected && currentModeId === 6) {
+          selectMode(9);
+        }
+      }, bedtimeDurationMins * 60 * 1000);
+      showToast(`Đã bật Đèn ngủ (Mode 6). Tự tắt sau ${bedtimeDurationMins} phút.`);
     }
 
     function onCitySelected(city) {
@@ -2701,6 +2754,7 @@
 
     // TỰ ĐỘNG KÉO THỜI TIẾT TỪ OPEN-METEO & GỬI FRAME 0x04
     async function fetchWeatherAuto() {
+      if (isOtaInProgress) return; // Không gửi gói thời tiết làm gián đoạn luồng nạp OTA
       const city = document.getElementById("citySelect").value;
       const coords = CITY_COORDS[city] || CITY_COORDS["Hà Nội"];
       try {
@@ -2753,7 +2807,6 @@
     // ========================================================================
     function triggerPomodoroCommand() {
       sendCommand("pomo");
-      updateModeHighlight(12);
       showToast("Đã kích hoạt đồng hồ Pomodoro 25p!");
     }
 
@@ -2814,24 +2867,26 @@
       progBar.style.width = "0%";
       statusLabel.innerText = "Đang gửi lệnh bắt đầu OTA...";
 
+      isOtaInProgress = true;
       try {
         // Frame 0x10: [0x10, Size0, Size1, Size2, Size3] Little Endian
         const sz = bytes.length;
         const startPkt = new Uint8Array([0x10, sz & 0xFF, (sz >> 8) & 0xFF, (sz >> 16) & 0xFF, (sz >> 24) & 0xFF]);
-        sendBytes(startPkt);
+        await sendBytes(startPkt);
         await new Promise(r => setTimeout(r, 300));
 
-        const chunkSize = 256;
+        const chunkSize = 240;
         let sent = 0;
 
         while (sent < sz) {
+          if (!isOtaInProgress) throw new Error("Tiến trình OTA đã bị hủy hoặc lỗi từ thiết bị.");
           const end = Math.min(sent + chunkSize, sz);
           const chunkData = bytes.slice(sent, end);
           // Frame 0x11: [0x11, Data...]
           const packet = new Uint8Array(1 + chunkData.length);
           packet[0] = 0x11;
           packet.set(chunkData, 1);
-          await rxChar.writeValueWithoutResponse(packet);
+          await sendBytes(packet);
 
           sent = end;
           const pct = Math.round(sent * 100 / sz);
@@ -2839,18 +2894,18 @@
           progLabel.innerText = pct + "%";
           statusLabel.innerText = `Đang nạp Flash: ${sent} / ${sz} bytes...`;
 
-          await new Promise(r => setTimeout(r, 15));
+          await new Promise(r => setTimeout(r, 20));
         }
 
         // Frame 0x12: OTA End
-        await new Promise(r => setTimeout(r, 100));
-        sendBytes(new Uint8Array([0x12]));
-        statusLabel.innerText = "Nạp thành công! Đèn đang khởi động lại...";
-        progBar.style.width = "100%";
-        showToast("Nạp OTA hoàn tất thành công! Đèn đang khởi động lại...");
+        await new Promise(r => setTimeout(r, 150));
+        await sendBytes(new Uint8Array([0x12]));
+        statusLabel.innerText = "Đã gửi xong! Đang chờ ESP32 kiểm tra toàn vẹn...";
       } catch (err) {
         statusLabel.innerText = "Lỗi OTA: " + err.message;
         showToast("Lỗi nạp OTA: " + err.message, "✕");
+      } finally {
+        isOtaInProgress = false;
       }
     }
 

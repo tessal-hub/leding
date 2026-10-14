@@ -13,35 +13,39 @@ import androidx.compose.ui.platform.LocalContext
  * to curated M3 tonal palettes for dark & light modes.
  */
 private val M3DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF4DD8E6),
-    onPrimary = Color(0xFF00363D),
+    primary = Color(0xFF00F2FE),
+    onPrimary = Color(0xFF051329),
     primaryContainer = Color(0xFF004F58),
     onPrimaryContainer = Color(0xFF90F1FF),
 
-    secondary = Color(0xFFB1CBD0),
-    onSecondary = Color(0xFF1C3438),
-    secondaryContainer = Color(0xFF324B4F),
-    onSecondaryContainer = Color(0xFFCDE7EC),
+    secondary = Color(0xFF4FACFE),
+    onSecondary = Color(0xFF051E3E),
+    secondaryContainer = Color(0xFF1E3A5F),
+    onSecondaryContainer = Color(0xFFD0E4FF),
 
-    tertiary = Color(0xFFBAC6EA),
-    onTertiary = Color(0xFF24304D),
-    tertiaryContainer = Color(0xFF3B4664),
-    onTertiaryContainer = Color(0xFFD9E2FF),
+    tertiary = Color(0xFFFF007F),
+    onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFF5C002E),
+    onTertiaryContainer = Color(0xFFFFD9E2),
 
     error = Color(0xFFFFB4AB),
     onError = Color(0xFF690005),
     errorContainer = Color(0xFF93000A),
     onErrorContainer = Color(0xFFFFDAD6),
 
-    background = Color(0xFF0F1416),
-    onBackground = Color(0xFFDEE3E5),
-    surface = Color(0xFF0F1416),
-    onSurface = Color(0xFFDEE3E5),
-    surfaceVariant = Color(0xFF3F484A),
-    onSurfaceVariant = Color(0xFFBFC8CA),
+    background = Color(0xFF090D16),
+    onBackground = Color(0xFFF8FAFC),
+    surface = Color(0xFF090D16),
+    onSurface = Color(0xFFF8FAFC),
+    surfaceContainerLow = Color(0xFF111622),
+    surfaceContainer = Color(0xFF141B2D),
+    surfaceContainerHigh = Color(0xFF1C253C),
+    surfaceContainerHighest = Color(0xFF25304D),
+    surfaceVariant = Color(0xFF141B2D),
+    onSurfaceVariant = Color(0xFF94A3B8),
 
-    outline = Color(0xFF899294),
-    outlineVariant = Color(0xFF3F484A)
+    outline = Color(0xFF475569),
+    outlineVariant = Color(0x1FFFFFFF)
 )
 
 private val M3LightColorScheme = lightColorScheme(
@@ -93,8 +97,8 @@ val DarkSurfaceElevated @Composable get() = MaterialTheme.colorScheme.surfaceCon
 
 @Composable
 fun LampTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    darkTheme: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current

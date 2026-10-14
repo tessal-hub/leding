@@ -45,10 +45,11 @@ void printUartHelp() {
   Serial.print(F(
     "\n=== LED MATRIX 360 CLI ===\n"
     " status, help, reboot\n"
-    " mode <0..11>, next, prev, bright <5..255>, save\n"
+    " mode <0..15>, next, prev, bright <5..255>, speed <10..100>, save\n"
     " mpu, touch, power, polarity [h/l], heartbeat <ms>\n"
-     " text <msg>, color <r g b>, clear, weather <temp> <id>\n"
-     " time <h> [m], slot <1..4> <preset|hex|clear> [r g b], slot show, slot list\n"
+    " text [r g b] <msg>, color <r g b>, clear, weather <temp> <id>\n"
+    " time <h> [m] [s], pomo, ota [abort]\n"
+    " slot <1..4> <preset|hex|clear> [r g b], slot show, slot list\n"
     "==========================\n\n"
   ));
 }
@@ -100,7 +101,11 @@ void printSystemStatusReport() {
   Serial.println("+------------------------------------------------------------------------------+");
 
   // Cảm biến Touch & MPU
+#if TOUCH_MODE_INTERNAL
+  bool touchActive = (touchRead(TOUCH_PIN) < TOUCH_THRESHOLD);
+#else
   bool touchActive = (digitalRead(TOUCH_PIN) == HIGH);
+#endif
   Serial.printf("| [CẢM BIẾN TOUCH] Chân GPIO %d: %s\n", TOUCH_PIN, touchActive ? "ĐANG CHẠM (HIGH)" : "KHÔNG CHẠM (LOW)");
 
   if (mpuFound) {
@@ -109,14 +114,14 @@ void printSystemStatusReport() {
       float pitch = atan2((float)ax, sqrt((float)ay * ay + (float)az * az)) * 180.0f / PI;
       float roll  = atan2((float)ay, sqrt((float)ax * ax + (float)az * az)) * 180.0f / PI;
       float mag   = sqrt((float)ax * ax + (float)ay * ay + (float)az * az) / 16384.0f;
-      Serial.printf("| [MPU-6050 I2C] Trạng thái: KẾT NỐI TỐT (0x68)\n");
+      Serial.printf("| [MPU-6050 I2C] Trạng thái: KẾT NỐI TỐT (0x%02X)\n", MPU_I2C_ADDR);
       Serial.printf("|                Gia tốc thô : Ax=%d, Ay=%d, Az=%d (Mag: %.2f g)\n", ax, ay, az, mag);
       Serial.printf("|                Góc nghiêng : Pitch=%.1f°, Roll=%.1f°\n", pitch, roll);
     } else {
       Serial.printf("| [MPU-6050 I2C] Trạng thái: Lỗi đọc dữ liệu I2C\n");
     }
   } else {
-    Serial.printf("| [MPU-6050 I2C] Trạng thái: KHÔNG TÌM THẤY (Chưa nối dây SDA:21, SCL:22)\n");
+    Serial.printf("| [MPU-6050 I2C] Trạng thái: KHÔNG TÌM THẤY (Chưa nối dây SDA:%d, SCL:%d)\n", MPU_SDA_PIN, MPU_SCL_PIN);
   }
 
   Serial.println("+------------------------------------------------------------------------------+");
@@ -192,13 +197,13 @@ bool executeCliCommand(const char* cmdLine) {
     return true;
   }
 
-  // 4. MODE <0..9>
+  // 4. MODE <0..15>
   if (strcmp(cmd, "mode") == 0) {
     if (arg != NULL) {
       int m = atoi(arg);
       if (m >= 0 && m < TOTAL_MODES) {
         currentMode = m;
-        saveSettingsToFlash();
+        markSettingsChanged(); // Hoãn ghi NVS 3s chống hao mòn Flash
         dbgLog(TAG_FX, "Đã chuyển sang Mode [%d]: %s", currentMode, getModeName(currentMode));
         return true; // Ngắt hiệu ứng cũ ngay lập tức
       } else {
@@ -213,7 +218,7 @@ bool executeCliCommand(const char* cmdLine) {
   // 5. NEXT
   if (strcmp(cmd, "next") == 0) {
     currentMode = (currentMode + 1) % TOTAL_MODES;
-    saveSettingsToFlash();
+    markSettingsChanged();
     dbgLog(TAG_FX, "Đã chuyển sang Mode tiếp theo: [%d] %s", currentMode, getModeName(currentMode));
     return true;
   }
@@ -221,7 +226,7 @@ bool executeCliCommand(const char* cmdLine) {
   // 6. PREV
   if (strcmp(cmd, "prev") == 0) {
     currentMode = (currentMode + TOTAL_MODES - 1) % TOTAL_MODES;
-    saveSettingsToFlash();
+    markSettingsChanged();
     dbgLog(TAG_FX, "Đã chuyển sang Mode trước đó: [%d] %s", currentMode, getModeName(currentMode));
     return true;
   }
@@ -234,8 +239,8 @@ bool executeCliCommand(const char* cmdLine) {
       currentBrightness = b;
       strip.setBrightness(toHardwareBrightness(currentBrightness));
       strip.show();
-      saveSettingsToFlash();
-      dbgLog(TAG_LED, "Đã đặt độ sáng mới: %d/255 (HW: %d) và lưu vào Flash", currentBrightness, toHardwareBrightness(currentBrightness));
+      markSettingsChanged(); // Không ghi Flash trực tiếp mỗi 100ms khi kéo slider
+      dbgLog(TAG_LED, "Đã đặt độ sáng mới: %d/255 (HW: %d)", currentBrightness, toHardwareBrightness(currentBrightness));
     } else {
       dbgLog(TAG_LED, "Độ sáng hiện tại: %d/255 (HW: %d)", currentBrightness, toHardwareBrightness(currentBrightness));
     }
@@ -248,8 +253,8 @@ bool executeCliCommand(const char* cmdLine) {
       int s = atoi(arg);
       s = constrain(s, 10, 100);
       currentSpeed = s;
-      saveSettingsToFlash();
-      dbgLog(TAG_LED, "Đã đặt tốc độ hiệu ứng mới: %d/100 và lưu vào Flash", currentSpeed);
+      markSettingsChanged();
+      dbgLog(TAG_LED, "Đã đặt tốc độ hiệu ứng mới: %d/100", currentSpeed);
     } else {
       dbgLog(TAG_LED, "Tốc độ hiện tại: %d/100 (10=chậm nhất, 50=chuẩn, 100=nhanh nhất)", currentSpeed);
     }
@@ -417,7 +422,7 @@ bool executeCliCommand(const char* cmdLine) {
       if (sscanf(arg, "%d %d %d", &r, &g, &b) == 3) {
         setCustomStaticColor(r, g, b);
         currentMode = 10;
-        saveSettingsToFlash();
+        markSettingsChanged();
         dbgLog(TAG_LED, "Đã chuyển sang Chế độ Màu Tĩnh RGB(%d, %d, %d)", r, g, b);
         return true;
       }
@@ -496,7 +501,7 @@ bool executeCliCommand(const char* cmdLine) {
             }
           }
           currentMode = 11;
-          saveSettingsToFlash();
+          markSettingsChanged();
           renderFourSlotsToMatrix();
           strip.show();
           markSlotsDirty();

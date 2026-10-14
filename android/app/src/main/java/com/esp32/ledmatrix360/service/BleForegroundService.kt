@@ -37,7 +37,9 @@ class BleForegroundService : Service() {
                     context, android.Manifest.permission.BLUETOOTH_SCAN
                 ) == PackageManager.PERMISSION_GRANTED
             } else {
-                true
+                ContextCompat.checkSelfPermission(
+                    context, android.Manifest.permission.ACCESS_FINE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
             }
         }
 
@@ -79,7 +81,7 @@ class BleForegroundService : Service() {
             }
         }
 
-        // Vòng lặp kiểm tra kịch bản Báo thức bình minh & Đèn ngủ tự động mỗi 30 giây
+        // Vòng lặp kiểm tra kịch bản Báo thức bình minh & Đèn ngủ tự động mỗi 20 giây
         serviceScope.launch {
             val prefs = com.esp32.ledmatrix360.data.PreferencesRepository.getInstance(applicationContext)
             var lastTriggeredKey = ""
@@ -89,10 +91,16 @@ class BleForegroundService : Service() {
                     val cal = java.util.Calendar.getInstance()
                     val curH = cal.get(java.util.Calendar.HOUR_OF_DAY)
                     val curM = cal.get(java.util.Calendar.MINUTE)
-                    val dayKey = "${cal.get(java.util.Calendar.DAY_OF_YEAR)}_$curH:$curM"
+                    val curTotalMin = curH * 60 + curM
 
-                    if (cfg.sunriseEnabled && curH == cfg.sunriseHour && curM == cfg.sunriseMinute && lastTriggeredKey != "sun_$dayKey") {
-                        lastTriggeredKey = "sun_$dayKey"
+                    // Tính thời điểm bắt đầu sáng dần = Giờ thức dậy trừ đi sunriseDurationMin
+                    val wakeTotalMin = cfg.sunriseHour * 60 + cfg.sunriseMinute
+                    val sunriseStartMin = (wakeTotalMin - cfg.sunriseDurationMin + 1440) % 1440
+                    val dayOfYear = cal.get(java.util.Calendar.DAY_OF_YEAR)
+
+                    val sunTriggerKey = "sun_${dayOfYear}_$sunriseStartMin"
+                    if (cfg.sunriseEnabled && curTotalMin == sunriseStartMin && lastTriggeredKey != sunTriggerKey) {
+                        lastTriggeredKey = sunTriggerKey
                         launch {
                             val steps = 4
                             val stepDelay = (cfg.sunriseDurationMin * 60_000L) / steps
@@ -104,15 +112,16 @@ class BleForegroundService : Service() {
                             delay(stepDelay)
                             bleManager.setStaticColor(255, 190, 40, 255)
                             delay(stepDelay)
-                            bleManager.setEffect(12)
+                            bleManager.setEffect(12, speed = 50, brightness = 255)
                         }
                     }
 
-                    if (cfg.bedtimeEnabled && curH == cfg.bedtimeHour && curM == cfg.bedtimeMinute && lastTriggeredKey != "bed_$dayKey") {
-                        lastTriggeredKey = "bed_$dayKey"
+                    val bedTriggerKey = "bed_${dayOfYear}_${cfg.bedtimeHour}:${cfg.bedtimeMinute}"
+                    if (cfg.bedtimeEnabled && curH == cfg.bedtimeHour && curM == cfg.bedtimeMinute && lastTriggeredKey != bedTriggerKey) {
+                        lastTriggeredKey = bedTriggerKey
                         launch {
-                            bleManager.setEffect(6)
-                            bleManager.setBrightness(10)
+                            // Gộp chọn Mode 6 và hạ độ sáng = 10 trong cùng 1 gói 0x02
+                            bleManager.setEffect(6, speed = 50, brightness = 10)
                             delay(cfg.bedtimeDurationMin * 60_000L)
                             if (bleManager.telemetryState.value.mode == 6) {
                                 bleManager.setEffect(9)
@@ -120,7 +129,7 @@ class BleForegroundService : Service() {
                         }
                     }
                 }
-                delay(30_000L)
+                delay(20_000L)
             }
         }
 

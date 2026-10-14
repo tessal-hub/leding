@@ -1156,16 +1156,15 @@ void triggerWeatherUpdate(int8_t temp, uint8_t weatherId, bool showBannerAndSwit
       break;
   }
 
-  // Cuộn ngắn gọn nhiệt độ + trạng thái 1 vòng rồi vào thẳng hiệu ứng Thời tiết 360° (Mode 15)
   char banner[24];
   snprintf(banner, sizeof(banner), "%dC %s", (int)temp, wLabel);
   dbgLog(TAG_FX, "Đồng bộ thời tiết (%s): %s -> Chạy hiệu ứng Thời tiết 360° (Mode 15)",
          isNight ? "BAN ĐÊM" : "BAN NGÀY", banner);
 
-  effectCylinderScrollText(banner, wCol, 55);
-
-  currentMode = 15; // Chuyển sang Mode 15: Hiển thị cảnh Thời tiết 360° trực tiếp
+  currentMode = 15; // Đặt Mode 15 trước khi cuộn chữ để nếu user bấm đổi mode giữa chừng sẽ không bị ghi đè
   markSettingsChanged();
+
+  effectCylinderScrollText(banner, wCol, 55);
 }
 
 // ============================================================================

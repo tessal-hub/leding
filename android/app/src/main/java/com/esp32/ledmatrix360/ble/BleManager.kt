@@ -54,15 +54,26 @@ class BleManager(private val context: Context) {
         _logs.value = current
     }
 
+    private val ioScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()
+    )
+    @Volatile
+    private var writeAckDeferred: kotlinx.coroutines.CompletableDeferred<Int>? = null
+    @Volatile
+    private var otaResultDeferred: kotlinx.coroutines.CompletableDeferred<Boolean>? = null
+
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
-            result?.device?.let { device ->
-                val name = device.name ?: ""
-                if (name == LampConstants.DEVICE_NAME || name.contains("LED-MATRIX")) {
-                    log("Tìm thấy thiết bị: $name (${device.address}). Đang kết nối...")
-                    stopScan()
-                    connect(device)
-                }
+            val device = result?.device ?: return
+            val name = device.name ?: result.scanRecord?.deviceName ?: ""
+            val hasNusUuid = result.scanRecord?.serviceUuids?.any {
+                it.uuid.toString().equals(LampConstants.NUS_SERVICE_UUID, ignoreCase = true)
+            } == true
+
+            if (name == LampConstants.DEVICE_NAME || name == "LED-360" || name.contains("LED-MATRIX") || hasNusUuid) {
+                log("Tìm thấy thiết bị: ${name.ifEmpty { "LED-360" }} (${device.address}). Đang kết nối...")
+                stopScan()
+                connect(device)
             }
         }
 
@@ -204,6 +215,14 @@ class BleManager(private val context: Context) {
             }
         }
 
+        override fun onCharacteristicWrite(
+            gatt: BluetoothGatt?,
+            characteristic: BluetoothGattCharacteristic?,
+            status: Int
+        ) {
+            writeAckDeferred?.complete(status)
+        }
+
         // Xử lý gói tin Notify nhận từ ESP32 (Android < 13)
         @Deprecated("Deprecated in Java")
         override fun onCharacteristicChanged(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?) {
@@ -226,6 +245,32 @@ class BleManager(private val context: Context) {
         if (raw.startsWith("{") && raw.endsWith("}")) {
             try {
                 val json = JSONObject(raw)
+                if (json.has("ota")) {
+                    when (val otaEvent = json.optString("ota")) {
+                        "ready" -> {
+                            _otaStatus.value = "Đèn đã vào chế độ OTA! Sẵn sàng chọn file .bin"
+                            log("ESP32 OTA: Sẵn sàng nhận firmware")
+                        }
+                        "start" -> log("ESP32 OTA: Đã mở phân vùng Flash thành công")
+                        "prog" -> {
+                            val pct = json.optInt("p", 0)
+                            _otaProgress.value = pct / 100f
+                        }
+                        "success" -> {
+                            _otaProgress.value = 1f
+                            _otaStatus.value = "Cập nhật thành công! Đèn đang khởi động lại..."
+                            otaResultDeferred?.complete(true)
+                        }
+                        "error", "timeout", "aborted" -> {
+                            val errCode = json.optInt("err", -1)
+                            _otaStatus.value = "Lỗi OTA từ đèn ($otaEvent, mã: $errCode)"
+                            _otaProgress.value = null
+                            otaResultDeferred?.complete(false)
+                        }
+                    }
+                    return
+                }
+
                 val cur = _telemetryState.value
                 _telemetryState.value = cur.copy(
                     mode = json.optInt("m", cur.mode),
@@ -296,7 +341,7 @@ class BleManager(private val context: Context) {
      * Gửi khung vẽ Pixel Art 32x8
      */
     fun sendPixelCanvas(canvasState: PixelCanvasState, brightness: Int = 0) {
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        ioScope.launch {
             sendFullCanvas32x8(canvasState)
         }
     }
@@ -446,12 +491,45 @@ class BleManager(private val context: Context) {
     }
 
 
+    suspend fun sendBytesWithAck(data: ByteArray, timeoutMs: Long = 3000L): Boolean {
+        val gatt = bluetoothGatt
+        val rxChar = rxCharacteristic
+        if (gatt == null || rxChar == null || !_isConnected.value) return false
+
+        val ack = kotlinx.coroutines.CompletableDeferred<Int>()
+        writeAckDeferred = ack
+
+        val initiated = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            gatt.writeCharacteristic(
+                rxChar,
+                data,
+                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            ) == BluetoothStatusCodes.SUCCESS
+        } else {
+            @Suppress("DEPRECATION")
+            rxChar.value = data
+            @Suppress("DEPRECATION")
+            rxChar.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            @Suppress("DEPRECATION")
+            gatt.writeCharacteristic(rxChar)
+        }
+
+        if (!initiated) {
+            writeAckDeferred = null
+            return false
+        }
+
+        val status = kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { ack.await() }
+        writeAckDeferred = null
+        return status == BluetoothGatt.GATT_SUCCESS
+    }
+
     /**
-     * Nạp Firmware OTA qua BLE GATT
+     * Nạp Firmware OTA qua BLE GATT với Flow Control (Write with Response & JSON confirmation)
      */
     suspend fun performOtaUpdate(
         firmwareBytes: ByteArray,
-        chunkSize: Int = 256,
+        chunkSize: Int = 240,
         onProgress: ((Float) -> Unit)? = null
     ): Boolean {
         if (!_isConnected.value || firmwareBytes.isEmpty()) {
@@ -464,52 +542,67 @@ class BleManager(private val context: Context) {
             _otaStatus.value = "Đang gửi lệnh bắt đầu OTA (${firmwareBytes.size} bytes)..."
             log("OTA: Bắt đầu nạp firmware (${firmwareBytes.size} bytes)...")
 
-            val size = firmwareBytes.size
-            val startPacket = ByteArray(5)
-            startPacket[0] = 0x10.toByte()
-            startPacket[1] = (size and 0xFF).toByte()
-            startPacket[2] = ((size shr 8) and 0xFF).toByte()
-            startPacket[3] = ((size shr 16) and 0xFF).toByte()
-            startPacket[4] = ((size shr 24) and 0xFF).toByte()
-            sendBytes(startPacket)
+            val resultDeferred = kotlinx.coroutines.CompletableDeferred<Boolean>()
+            otaResultDeferred = resultDeferred
 
-            kotlinx.coroutines.delay(250)
+            val size = firmwareBytes.size
+            val startPacket = byteArrayOf(
+                0x10.toByte(),
+                (size and 0xFF).toByte(),
+                ((size shr 8) and 0xFF).toByte(),
+                ((size shr 16) and 0xFF).toByte(),
+                ((size shr 24) and 0xFF).toByte()
+            )
+            if (!sendBytesWithAck(startPacket)) {
+                _otaStatus.value = "Không thể gửi gói khởi tạo OTA (0x10)!"
+                _otaProgress.value = null
+                return false
+            }
+
+            kotlinx.coroutines.delay(200)
 
             var sent = 0
             val total = firmwareBytes.size
 
             while (sent < total) {
+                if (resultDeferred.isCompleted && !resultDeferred.await()) {
+                    return false
+                }
                 val end = minOf(sent + chunkSize, total)
                 val len = end - sent
                 val chunkPacket = ByteArray(1 + len)
                 chunkPacket[0] = 0x11.toByte()
                 System.arraycopy(firmwareBytes, sent, chunkPacket, 1, len)
 
-                sendBytes(chunkPacket)
+                if (!sendBytesWithAck(chunkPacket, timeoutMs = 5000L)) {
+                    _otaStatus.value = "Mất kết nối hoặc lỗi truyền gói dữ liệu tại byte $sent!"
+                    _otaProgress.value = null
+                    return false
+                }
                 sent += len
 
                 val p = sent.toFloat() / total.toFloat()
                 _otaProgress.value = p
                 onProgress?.invoke(p)
                 _otaStatus.value = "Đang truyền: ${(p * 100).toInt()}% ($sent / $total bytes)"
-
-                kotlinx.coroutines.delay(12)
             }
 
-            kotlinx.coroutines.delay(250)
-
-            _otaStatus.value = "Đang chốt firmware và đợi ESP32 kiểm tra..."
-            sendBytes(byteArrayOf(0x12.toByte()))
+            _otaStatus.value = "Đang chốt firmware và đợi ESP32 kiểm tra checksum..."
+            sendBytesWithAck(byteArrayOf(0x12.toByte()))
             log("OTA: Đã gửi lệnh chốt firmware 0x12.")
 
-            kotlinx.coroutines.delay(1500)
-            _otaProgress.value = 1f
-            _otaStatus.value = "Cập nhật thành công! Đèn đang khởi động lại..."
+            val verified = kotlinx.coroutines.withTimeoutOrNull(5000L) { resultDeferred.await() } ?: false
+            otaResultDeferred = null
+            if (!verified) {
+                _otaProgress.value = null
+                return false
+            }
             return true
         } catch (e: Exception) {
             log("OTA Lỗi: ${e.message}")
             _otaStatus.value = "Lỗi trong quá trình nạp: ${e.message}"
             _otaProgress.value = null
+            otaResultDeferred = null
             return false
         }
     }
