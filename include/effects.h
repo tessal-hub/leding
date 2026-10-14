@@ -71,3 +71,10 @@ void effectEmergencyFlashlight(uint32_t durationMs = EMERGENCY_TIMEOUT_MS);
 
 // Cập nhật thông báo thời tiết từ App (Frame 0x04)
 void triggerWeatherUpdate(int8_t temp, uint8_t weatherId);
+
+// Mode 15: Thời tiết sống động 360° theo giờ Ngày/Đêm (Live Weather Scene)
+void effectWeatherClearSky(uint32_t durationMs = 60000); // ID 1: Nắng (Ngày) / Trăng Sao (Đêm)
+void effectWeatherCloudy(uint32_t durationMs = 60000);   // ID 2: Mây trôi đa tầng 360°
+void effectWeatherRain(uint32_t durationMs = 60000);     // ID 3: Mưa rơi Sub-pixel & Vũng nước đáy
+void effectWeatherStorm(uint32_t durationMs = 60000);    // ID 4: Mưa giông & Sấm chớp phân nhánh
+void effectWeatherLive(uint32_t durationMs = 60000);     // Mode 15: theo Weather ID + Giờ Ngày/Đêm

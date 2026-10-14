@@ -61,7 +61,7 @@ uint32_t getSlotPixel(uint8_t slot, uint8_t x, uint8_t y);
 void fadeTransition(uint16_t durationMs = 240);
 
 // Hiển thị đồng hồ để bàn 360 độ (Desk Clock)
-void renderDeskClock(uint8_t hour, uint8_t minute, bool colonBlink, int8_t temp = 25);
+void renderDeskClock(uint8_t hour, uint8_t minute, bool colonBlink, int8_t temp = 25, bool showTemp = false);
 
 // Vẽ dữ liệu 4 ô lên ma trận LED (có hỗ trợ Animation đa khung hình)
 void renderFourSlotsToMatrix();

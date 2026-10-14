@@ -38,9 +38,18 @@ bool isBleOtaInProgress() {
   return otaInProgress;
 }
 
-// Hàng đợi nhận lệnh an toàn đa luồng
+// Hàng đợi nhận lệnh an toàn đa luồng (mutex blockable thay spinlock: cho phép
+// malloc bên trong queue khi nhận gói OTA 512B liên tục mà không khóa ngắt RMT)
+// ponytail: chưa tách ring-buffer riêng cho OTA 0x11, thêm khi OTA nghẽn đo được
 static std::queue<std::string> bleRxQueue;
-static portMUX_TYPE bleMux = portMUX_INITIALIZER_UNLOCKED;
+static SemaphoreHandle_t bleMutex = NULL;
+
+static inline bool bleLock(TickType_t wait = pdMS_TO_TICKS(20)) {
+  return bleMutex != NULL && xSemaphoreTake(bleMutex, wait) == pdTRUE;
+}
+static inline void bleUnlock() {
+  if (bleMutex != NULL) xSemaphoreGive(bleMutex);
+}
 
 // Callbacks xử lý kết nối / ngắt kết nối & Bảo mật Ghép đôi (Security / Bonding)
 class BleServerCallbacks: public NimBLEServerCallbacks {
@@ -84,17 +93,20 @@ class BleRxCallbacks: public NimBLECharacteristicCallbacks {
   void onWrite(NimBLECharacteristic *pCharacteristic) {
     std::string rxValue = pCharacteristic->getValue();
     if (rxValue.length() > 0) {
-      portENTER_CRITICAL(&bleMux);
-      if (bleRxQueue.size() < 40) {
-        bleRxQueue.push(rxValue);
+      if (bleLock()) {
+        if (bleRxQueue.size() < 40) {
+          bleRxQueue.push(std::move(rxValue));
+        }
+        bleUnlock();
       }
-      portEXIT_CRITICAL(&bleMux);
     }
   }
 };
 
 void initBleService() {
   dbgLog(TAG_BLE, "Khởi tạo dịch vụ BLE Nordic UART Service (Tên: %s)...", BLE_DEVICE_NAME);
+
+  if (bleMutex == NULL) bleMutex = xSemaphoreCreateMutex();
 
   // 1. Khởi tạo BLE Device & Tăng công suất phát sóng tối đa (+9dBm)
   NimBLEDevice::init(BLE_DEVICE_NAME);
@@ -207,14 +219,22 @@ bool isBleConnected() {
   return deviceConnected;
 }
 
+// Đọc số nguyên ngay sau dấu ':' của key (strtol: đúng vị trí, chịu giá trị
+// âm/rỗng — atoi + find_first_of sẽ đọc lố sang số của trường kế tiếp)
+static int jsonIntAfterKey(const std::string& cmd, size_t keyPos) {
+  size_t colon = cmd.find(':', keyPos);
+  if (colon == std::string::npos) return 0;
+  return (int)strtol(cmd.c_str() + colon + 1, NULL, 10);
+}
+
 // Xử lý gói tin dạng nhị phân, JSON đơn giản hoặc lệnh văn bản thuần
 static bool parseAndExecuteBleCommand(const std::string& raw) {
   if (raw.empty()) return false;
 
-  // 1. KIỂM TRA GÓI TIN NHỊ PHÂN BLE GATT (0x01 .. 0x05 & 0x10 .. 0x13)
+  // 1. KIỂM TRA GÓI TIN NHỊ PHÂN BLE GATT (0x01 .. 0x07 & 0x10 .. 0x13)
   uint8_t op = (uint8_t)raw[0];
-  if ((op >= 0x01 && op <= 0x05) || (op >= 0x10 && op <= 0x13)) {
-    if (op <= 0x05) {
+  if ((op >= 0x01 && op <= 0x07) || (op >= 0x10 && op <= 0x13)) {
+    if (op <= 0x07) {
       dbgLog(TAG_BLE, "Nhận Binary Frame BLE Opcode: 0x%02X (%d bytes)", op, raw.length());
     }
     bool needInterrupt = false;
@@ -406,7 +426,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
         break;
       }
     }
-    if (op <= 0x05) bleSendTelemetry(true);
+    if (op <= 0x07) bleSendTelemetry(true);
     return needInterrupt;
   }
 
@@ -426,7 +446,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
     size_t posM = cmd.find("\"m\":");
     if (posM == std::string::npos) posM = cmd.find("\"mode\":");
     if (posM != std::string::npos) {
-      int m = atoi(cmd.c_str() + cmd.find_first_of("0123456789", posM));
+      int m = jsonIntAfterKey(cmd, posM);
       if (m >= 0 && m < TOTAL_MODES) {
         currentMode = m;
         markSettingsChanged();
@@ -439,7 +459,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
     if (posB == std::string::npos) posB = cmd.find("\"bright\":");
     if (posB == std::string::npos) posB = cmd.find("\"bri\":");
     if (posB != std::string::npos) {
-      int b = atoi(cmd.c_str() + cmd.find_first_of("0123456789", posB));
+      int b = jsonIntAfterKey(cmd, posB);
       currentBrightness = constrain((uint8_t)b, (uint8_t)MIN_BRIGHTNESS, (uint8_t)MAX_BRIGHTNESS);
       strip.setBrightness(currentBrightness);
       strip.show();
@@ -450,7 +470,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
     size_t posP = cmd.find("\"p\":");
     if (posP == std::string::npos) posP = cmd.find("\"power\":");
     if (posP != std::string::npos) {
-      int p = atoi(cmd.c_str() + cmd.find_first_of("0123456789", posP));
+      int p = jsonIntAfterKey(cmd, posP);
       currentMode = (p == 0) ? 9 : 1;
       markSettingsChanged();
       needInterrupt = true;
@@ -492,11 +512,11 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
     size_t posW = cmd.find("\"w\":");
     if (posW == std::string::npos) posW = cmd.find("\"weather\":");
     if (posW != std::string::npos) {
-      int wId = atoi(cmd.c_str() + cmd.find_first_of("0123456789", posW));
+      int wId = jsonIntAfterKey(cmd, posW);
       int temp = 25;
       size_t posTemp = cmd.find("\"temp\":");
       if (posTemp != std::string::npos) {
-        temp = atoi(cmd.c_str() + cmd.find_first_of("-0123456789", posTemp));
+        temp = jsonIntAfterKey(cmd, posTemp);
       }
       triggerWeatherUpdate((int8_t)temp, (uint8_t)wId);
       needInterrupt = true;
@@ -505,7 +525,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
     // g. Cài đặt Ô 8x8 qua JSON: {"slot": 1, "p": "heart"} hoặc {"slot": 2, "clear": 1}
     size_t posSlot = cmd.find("\"slot\":");
     if (posSlot != std::string::npos) {
-      int s = atoi(cmd.c_str() + cmd.find_first_of("0123456789", posSlot));
+      int s = jsonIntAfterKey(cmd, posSlot);
       if (s >= 1 && s <= NUM_SLOTS) s -= 1;
       if (s >= 0 && s < NUM_SLOTS) {
         size_t posPres = cmd.find("\"preset\":");
@@ -569,12 +589,13 @@ bool handleBleService() {
   // 2. Lấy lệnh từ hàng đợi RX ra thực thi
   while (true) {
     std::string nextCmd = "";
-    portENTER_CRITICAL(&bleMux);
-    if (!bleRxQueue.empty()) {
-      nextCmd = bleRxQueue.front();
-      bleRxQueue.pop();
+    if (bleLock(portMAX_DELAY)) {
+      if (!bleRxQueue.empty()) {
+        nextCmd = std::move(bleRxQueue.front());
+        bleRxQueue.pop();
+      }
+      bleUnlock();
     }
-    portEXIT_CRITICAL(&bleMux);
 
     if (nextCmd.empty()) break;
 

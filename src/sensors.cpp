@@ -38,7 +38,28 @@ static bool hasRedPulse = false;
 static bool wasPomodoroTilted = false;
 bool checkPomodoroOrientation();
 
-// eFuse VRef Calibration (Tối ưu hóa riêng cho chip ESP32-D0WDQ6)
+#if CONFIG_IDF_TARGET_ESP32C3
+static void initAdcCal() {
+  analogReadResolution(12);
+  dbgLog(TAG_PWR, "ADC eFuse: Kích hoạt bộ chuyển đổi ADC hiệu chuẩn nhà máy của chip ESP32-C3!");
+}
+
+uint16_t getStatPinMilliVolts() {
+  uint32_t maxVal = 0;
+  for (int i = 0; i < 6; i++) {
+    uint32_t mv = analogReadMilliVolts(PIN_CHG_STAT);
+    if (mv > maxVal) maxVal = mv;
+    delayMicroseconds(60);
+  }
+  return (uint16_t)maxVal;
+}
+
+bool isVbusPlugged() {
+  uint32_t mv = analogReadMilliVolts(PIN_VBUS);
+  return (mv >= 1200) || (digitalRead(PIN_VBUS) == HIGH);
+}
+#else
+// eFuse VRef Calibration (Dành cho chip ESP32 Classic D0WDQ6)
 static esp_adc_cal_characteristics_t adcChars;
 static bool efuseCalAvailable = false;
 
@@ -73,6 +94,7 @@ bool isVbusPlugged() {
   uint16_t mv = efuseCalAvailable ? (uint16_t)esp_adc_cal_raw_to_voltage(raw, &adcChars) : (uint16_t)((raw * 3300) / 4095);
   return (mv >= 1200) || (digitalRead(PIN_VBUS) == HIGH);
 }
+#endif
 
 bool isStatPinHigh() {
   uint16_t mv = getStatPinMilliVolts();
@@ -171,6 +193,7 @@ const char* getModeName(uint8_t mode) {
     case 12: return "Dong ho de ban 360 do (Desk Clock)";
     case 13: return "Nhip dap trai tim (Heartbeat Pulse - Lang man)";
     case 14: return "Song tinh yeu lan toa (Love Ripple - Mo mong)";
+    case 15: return "Thoi tiet 360 do Ngay/Dem (Live Weather Scene)";
     default: return "Khong xac dinh";
   }
 }
@@ -256,7 +279,7 @@ void initMPU6050() {
 }
 
 void initSensors() {
-  // Cảm biến chạm GPIO 5
+  // Cảm biến chạm GPIO 4
   pinMode(TOUCH_PIN, INPUT_PULLDOWN);
   dbgLog(TAG_TOUCH, "Cảm biến Touch: Module Digital TTP223 tại GPIO %d", TOUCH_PIN);
 

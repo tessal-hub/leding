@@ -20,8 +20,12 @@
  */
 
 void setup() {
-  // 0. Khóa xung nhịp CPU ở 240MHz tối đa cho chip ESP32-D0WDQ6 Dual-Core
+  // 0. Khóa xung nhịp CPU tối đa (160MHz cho ESP32-C3 RISC-V, 240MHz cho ESP32 Classic)
+#if CONFIG_IDF_TARGET_ESP32C3
+  setCpuFrequencyMhz(160);
+#else
   setCpuFrequencyMhz(240);
+#endif
 
   // 1. Khởi tạo UART Debug & Serial CLI Console
   initUartDebug();
@@ -239,6 +243,11 @@ void loop() {
     case 14:
       // Mode 14: Love Ripple - Sóng tình yêu lan tỏa
       effectLoveRipple(60000);
+      break;
+
+    case 15:
+      // Mode 15: Live Weather 360° - Thời tiết sống động theo giờ Ngày/Đêm
+      effectWeatherLive(60000);
       break;
 
   }

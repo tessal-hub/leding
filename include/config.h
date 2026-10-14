@@ -10,7 +10,7 @@
 // ============================================================================
 // 1. CẤU HÌNH PHẦN CỨNG MA TRẬN LED WS2812B
 // ============================================================================
-#define LED_PIN               13     // Chân xuất dữ liệu DIN cho LED
+#define LED_PIN               6      // Chân xuất dữ liệu DIN cho LED (GPIO 6 trên ESP32-C3)
 
 #define NUM_PANELS            4      // Số lượng tấm ma trận 8x8 nối tiếp
 #define PANEL_WIDTH           8      // Chiều rộng mỗi tấm (pixel)
@@ -40,18 +40,18 @@
 #define INVERT_PANEL_Y        false  // true: Lật ngược trên <-> dưới
 
 // ============================================================================
-// 3. CẤU HÌNH CẢM BIẾN CHẠM (TOUCH SENSOR) - GPIO 5
+// 3. CẤU HÌNH CẢM BIẾN CHẠM (TOUCH SENSOR) - GPIO 4
 // ============================================================================
-#define TOUCH_PIN             5
-#define TOUCH_MODE_INTERNAL   0      // 0: Module Digital TTP223 qua GPIO 5
+#define TOUCH_PIN             4      // Chân tín hiệu SIG module TTP223 (GPIO 4 trên ESP32-C3)
+#define TOUCH_MODE_INTERNAL   0      // 0: Module Digital TTP223
 #define TOUCH_THRESHOLD       35     // Ngưỡng chạm điện dung (nếu dùng touchRead)
 #define HOLD_THRESHOLD_MS     400    // Giữ nút >= 400ms để vào chế độ chỉnh sáng MPU
 
 // ============================================================================
 // 4. CẤU HÌNH CẢM BIẾN GIA TỐC MPU-6050 (I2C)
 // ============================================================================
-#define MPU_SDA_PIN           21     // Chân I2C SDA
-#define MPU_SCL_PIN           22     // Chân I2C SCL
+#define MPU_SDA_PIN           0      // Chân I2C SDA (GPIO 0 trên ESP32-C3)
+#define MPU_SCL_PIN           1      // Chân I2C SCL (GPIO 1 trên ESP32-C3)
 #define MPU_I2C_ADDR          0x68   // Địa chỉ I2C mặc định
 
 #define MIN_BRIGHTNESS        5      // Độ sáng tối thiểu khi nghiêng
@@ -77,14 +77,15 @@
 // Mode 12: Đồng hồ để bàn 360° kỹ thuật số & thời tiết (Desk Clock 360°)
 // Mode 13: Nhịp đập trái tim (Heartbeat Pulse - Tình yêu lãng mạn)
 // Mode 14: Sóng tình yêu lan tỏa (Love Ripple - Dreamy romantic ripple)
+// Mode 15: Thời tiết sống động 360° theo giờ Ngày/Đêm (Live Weather Scene)
 #define DEFAULT_MODE          1      // Khởi động mặc định vào Mode 1: Lava Noise
-#define TOTAL_MODES           15     // 15 chế độ (bao gồm 2 hiệu ứng tình yêu mới)
+#define TOTAL_MODES           16     // Mode 0..15 (Mode 15: Live Weather 360° Ngày/Đêm)
 
 // ============================================================================
 // 6. CẤU HÌNH QUẢN LÝ NGUỒN & SẠC PIN (MODULE IP2312)
 // ============================================================================
-#define PIN_VBUS              32     // Tuyến phát hiện cắm nguồn 5V USB (qua cầu phân áp 10k/20k)
-#define PIN_CHG_STAT          33     // Tuyến phát hiện LED đỏ IP2312 (qua cầu phân áp)
+#define PIN_VBUS              2      // Tuyến phát hiện cắm nguồn 5V USB (GPIO 2 - ADC1_CH2 trên ESP32-C3)
+#define PIN_CHG_STAT          3      // Tuyến phát hiện LED đỏ IP2312 (GPIO 3 - ADC1_CH3 trên ESP32-C3)
 #define CHG_STAT_ACTIVE_LOW   false  // false: Active HIGH (Đèn tắt = 0V, Đèn sáng = >700mV)
 #define CHG_STAT_THRESHOLD_MV 700    // Ngưỡng điện áp phân định sạc/đầy (mV)
 #define CHG_SOFT_START_HOLD_MS 1500  // Khoảng đệm chờ IP2312 khởi động mềm (1.5s), triệt tiêu hoàn toàn nháy xanh khi cắm sạc

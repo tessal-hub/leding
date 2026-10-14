@@ -53,7 +53,7 @@ void initDisplay(uint8_t brightness) {
   strip.setBrightness(brightness);
   strip.clear();
   strip.show();
-  dbgLog(TAG_LED, "Khởi tạo Adafruit_NeoPixel: %d bóng (DIN: GPIO %d, Độ sáng: %d/255) [Look-Up Table: TỐI ƯU HÓA 240MHz]",
+  dbgLog(TAG_LED, "Khởi tạo Adafruit_NeoPixel: %d bóng (DIN: GPIO %d, Độ sáng: %d/255) [Look-Up Table: 1 CHU KỲ ĐỌC RAM]",
          NUM_LEDS, LED_PIN, brightness);
 }
 
@@ -138,11 +138,21 @@ void fadeTransition(uint16_t durationMs) {
   uint16_t stepDelay = durationMs / 12;
   if (stepDelay < 4) stepDelay = 4;
 
+  // Snapshot RAM pixel: setBrightness() rescale mất mát (lossy) trực tiếp trên
+  // buffer, nên mỗi bước fade phải dựng lại từ bản gốc thay vì chồng lên nhau.
+  static uint8_t fadeSnap[NUM_LEDS * 3];
+  uint8_t* pix = strip.getPixels();
+  uint16_t nBytes = strip.numPixels() * 3; // GRB, không kênh trắng
+  if (pix == NULL || nBytes > sizeof(fadeSnap)) return;
+  memcpy(fadeSnap, pix, nBytes);
+
   for (int step = 6; step >= 0; step--) {
+    memcpy(pix, fadeSnap, nBytes);
     strip.setBrightness((origBrightness * step) / 6);
     strip.show();
     delay(stepDelay);
   }
+  memcpy(pix, fadeSnap, nBytes); // Trả buffer gốc trước khi clear để lần sau không fade từ data rác
   strip.clear();
   strip.show();
   strip.setBrightness(origBrightness);
@@ -335,13 +345,22 @@ void saveSlotsToFlash() {
   slotsDirty = false;
   slotPrefs.begin("matrix_slots", false);
   slotPrefs.putBytes("pixels", slotPixels, sizeof(slotPixels));
+  slotPrefs.putBytes("ptype", slotPresetType, sizeof(slotPresetType));
+  slotPrefs.putBytes("pcol", slotPresetColor, sizeof(slotPresetColor));
   slotPrefs.end();
-  dbgLog(TAG_FLASH, "Đã lưu 4 Ô Bitmap (1024 bytes) vào Flash NVS!");
+  dbgLog(TAG_FLASH, "Đã lưu 4 Ô Bitmap (1024 bytes) + preset type/color vào Flash NVS!");
 }
 
 void loadSlotsFromFlash() {
   slotPrefs.begin("matrix_slots", true);
   size_t readLen = slotPrefs.getBytes("pixels", slotPixels, sizeof(slotPixels));
+  // Thiết bị đã nâng cấp từ firmware cũ (chưa có ptype/pcol): giữ type mặc định, màu 0
+  if (slotPrefs.getBytes("ptype", slotPresetType, sizeof(slotPresetType)) != sizeof(slotPresetType)) {
+    slotPresetType[0] = 1; slotPresetType[1] = 2; slotPresetType[2] = 3; slotPresetType[3] = 4;
+  }
+  if (slotPrefs.getBytes("pcol", slotPresetColor, sizeof(slotPresetColor)) != sizeof(slotPresetColor)) {
+    memset(slotPresetColor, 0, sizeof(slotPresetColor));
+  }
   slotPrefs.end();
   if (readLen == sizeof(slotPixels)) {
     dbgLog(TAG_FLASH, "Đã khôi phục 4 Ô Bitmap tùy biến từ Flash NVS!");
@@ -358,6 +377,7 @@ void initSlots() {
 
 void setSlotBitmap1Bit(uint8_t slot, uint8_t r, uint8_t g, uint8_t b, const uint8_t* rows) {
   if (slot >= NUM_SLOTS || rows == NULL) return;
+  slotPresetType[slot] = 0; // Bitmap tự vẽ: gỡ preset cũ để renderFourSlotsAnimated() không đè Frame 2 lên
   uint32_t color = strip.Color(r, g, b);
   for (uint8_t y = 0; y < 8; y++) {
     uint8_t rowVal = rows[y];
@@ -525,7 +545,7 @@ static void drawDigit3x5(int16_t startX, int16_t startY, uint8_t digit, uint32_t
   }
 }
 
-void renderDeskClock(uint8_t hour, uint8_t minute, bool colonBlink, int8_t temp) {
+void renderDeskClock(uint8_t hour, uint8_t minute, bool colonBlink, int8_t temp, bool showTemp) {
   strip.clear();
   uint8_t h1 = (hour / 10) % 10;
   uint8_t h2 = hour % 10;
@@ -535,24 +555,39 @@ void renderDeskClock(uint8_t hour, uint8_t minute, bool colonBlink, int8_t temp)
   const uint32_t colHour  = strip.Color(0, 220, 255);   // Cyan băng mát mắt
   const uint32_t colColon = strip.Color(255, 180, 20); // Vàng nắng nhấp nháy 1Hz
   const uint32_t colMin   = strip.Color(245, 245, 255);  // Trắng tuyết tinh khôi
+  const uint32_t colTemp  = strip.Color(255, 140, 20); // Cam hổ phách cho nhiệt độ
+
+  // Chuẩn bị ký tự nhiệt độ ("-5C".."99C", font 5x6 sẵn có)
+  int t = constrain((int)temp, -9, 99);
+  char tc1 = 0, tc2 = '0';
+  bool twoChar = false;
+  if (t < 0) { tc1 = '-'; tc2 = (char)('0' + (-t)); twoChar = true; }
+  else if (t >= 10) { tc1 = (char)('0' + t / 10); tc2 = (char)('0' + t % 10); twoChar = true; }
+  else { tc2 = (char)('0' + t); }
 
   // Hiển thị 2 mặt đối xứng 360° (Mặt trước: offset 0, Mặt sau: offset 16)
   for (int face = 0; face < 2; face++) {
     int16_t base = face * 16;
 
-    // Giờ (H1, H2)
-    drawDigit3x5(base + 1, 1, h1, colHour);
-    drawDigit3x5(base + 5, 1, h2, colHour);
+    if (showTemp) {
+      if (twoChar) drawCharCylinder(base + 0, tc1, colTemp);
+      drawCharCylinder(base + 5, tc2, colTemp);
+      drawCharCylinder(base + 10, 'C', colTemp);
+    } else {
+      // Giờ (H1, H2)
+      drawDigit3x5(base + 1, 1, h1, colHour);
+      drawDigit3x5(base + 5, 1, h2, colHour);
 
-    // Dấu hai chấm (Colon)
-    if (colonBlink) {
-      setPixelXY(base + 8, 2, colColon);
-      setPixelXY(base + 8, 4, colColon);
+      // Dấu hai chấm (Colon)
+      if (colonBlink) {
+        setPixelXY(base + 8, 2, colColon);
+        setPixelXY(base + 8, 4, colColon);
+      }
+
+      // Phút (M1, M2)
+      drawDigit3x5(base + 9, 1, m1, colMin);
+      drawDigit3x5(base + 13, 1, m2, colMin);
     }
-
-    // Phút (M1, M2)
-    drawDigit3x5(base + 9, 1, m1, colMin);
-    drawDigit3x5(base + 13, 1, m2, colMin);
 
     // Dải đèn đế trang trí hàng 7
     for (int x = 0; x < 16; x++) {

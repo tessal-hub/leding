@@ -47,8 +47,8 @@ void printUartHelp() {
     " status, help, reboot\n"
     " mode <0..11>, next, prev, bright <5..255>, save\n"
     " mpu, touch, power, polarity [h/l], heartbeat <ms>\n"
-    " text <msg>, color <r g b>, clear, weather <temp> <id>\n"
-    " slot <1..4> <preset|hex|clear> [r g b], slot show, slot list\n"
+     " text <msg>, color <r g b>, clear, weather <temp> <id>\n"
+     " time <h> [m], slot <1..4> <preset|hex|clear> [r g b], slot show, slot list\n"
     "==========================\n\n"
   ));
 }
@@ -138,7 +138,7 @@ void initUartDebug() {
          ESP.getSdkVersion(), ESP.getCpuFreqMHz(), ESP.getFreeHeap());
   dbgLog(TAG_SYS, "Ma trận LED: 4 tấm 8x8 = %d cột x %d hàng (%d bóng) tại GPIO %d",
          MATRIX_WIDTH, MATRIX_HEIGHT, NUM_LEDS, LED_PIN);
-  dbgLog(TAG_SYS, "Cảm biến Touch: GPIO %d | MPU-6050: SDA 21, SCL 22", TOUCH_PIN);
+  dbgLog(TAG_SYS, "Cảm biến Touch: GPIO %d | MPU-6050: SDA %d, SCL %d", TOUCH_PIN, MPU_SDA_PIN, MPU_SCL_PIN);
   dbgLog(TAG_SYS, "Quản lý sạc IP2312: VBUS GPIO %d, STAT GPIO %d", PIN_VBUS, PIN_CHG_STAT);
   dbgLog(TAG_SYS, "Gõ 'help' hoặc '?' trong Serial Monitor để xem danh sách lệnh điều khiển.");
   Serial.println("================================================================================");
@@ -491,6 +491,21 @@ bool executeCliCommand(const char* cmdLine) {
       }
     }
     dbgLog(TAG_CLI, "Cú pháp: slot <1..4> <preset|hex|clear> [r g b]  hoặc  slot show  hoặc  slot list");
+    return false;
+  }
+
+  // 19b. TIME <giờ> [phút] [giây]: đồng bộ RTC để thử chu kỳ Ngày/Đêm của Mode 15
+  if (strcmp(cmd, "time") == 0) {
+    if (arg != NULL) {
+      int h = 12, m = 0, s = 0;
+      if (sscanf(arg, "%d %d %d", &h, &m, &s) >= 1) {
+        syncDeviceTime((uint8_t)h, (uint8_t)m, (uint8_t)s);
+        dbgLog(TAG_CLI, "Đã đồng bộ giờ RTC %02d:%02d:%02d (thử: 6h binh minh, 12h trua, 17h45 hoang hon, 22h dem)",
+               h, m, s);
+        return false; // Palette trời đọc RTC mỗi frame nên tự đổi màu, không cần ngắt effect
+      }
+    }
+    dbgLog(TAG_CLI, "Cú pháp: time <gio> [phut] [giay]  (Ví dụ: time 17 45)");
     return false;
   }
 
