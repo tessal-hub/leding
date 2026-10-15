@@ -50,6 +50,7 @@ static void precomputeXyTable() {
 void initDisplay(uint8_t brightness) {
   precomputeXyTable();
   strip.begin();
+  gpio_set_drive_capability((gpio_num_t)LED_PIN, GPIO_DRIVE_CAP_3); // Dòng phát cực đại 40mA cho cạnh xung DIN 3.3V vuông vức
   strip.setBrightness(toHardwareBrightness(brightness));
   strip.clear();
   strip.show();

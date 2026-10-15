@@ -111,6 +111,10 @@ static bool lastVbusState = false;
 static unsigned long vbusConnectTime = 0;
 
 ChargeState updateChargeState() {
+#if !ENABLE_BATTERY_MONITOR
+  currentChargeState = DISCHARGING;
+  return DISCHARGING;
+#else
   unsigned long now = millis();
   static unsigned long lastChgCheck = 0;
   if (now - lastChgCheck < 150 && lastChgCheck != 0) {
@@ -173,6 +177,7 @@ ChargeState updateChargeState() {
       }
     }
   }
+#endif
 
   return currentChargeState;
 }
@@ -304,13 +309,18 @@ void initSensors() {
   initAdcCal();
 
   // Tuyến giám sát sạc pin IP2312
-  pinMode(PIN_VBUS, INPUT);
-  pinMode(PIN_CHG_STAT, INPUT);
+#if ENABLE_BATTERY_MONITOR
+  pinMode(PIN_VBUS, INPUT_PULLDOWN);
+  pinMode(PIN_CHG_STAT, INPUT_PULLDOWN);
   updateChargeState(); // Khởi tạo bộ đếm sạc
   delay(100);
   updateChargeState(); // Chốt trạng thái sạc ngay khi khởi động
   dbgLog(TAG_PWR, "Giám sát sạc IP2312: VBUS GPIO %d, STAT GPIO %d (Khởi đầu: %s)",
          PIN_VBUS, PIN_CHG_STAT, (currentChargeState == 0) ? "PIN" : ((currentChargeState == 1) ? "ĐANG SẠC" : "PIN ĐẦY"));
+#else
+  currentChargeState = DISCHARGING;
+  dbgLog(TAG_PWR, "Giám sát sạc IP2312: ĐÃ TẮT (ENABLE_BATTERY_MONITOR=false) chống thả nổi chân GPIO %d, %d", PIN_VBUS, PIN_CHG_STAT);
+#endif
 
   // Đọc Flash NVS
   loadSettingsFromFlash();

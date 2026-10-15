@@ -54,8 +54,8 @@
 #define MPU_SCL_PIN           1      // Chân I2C SCL (GPIO 1 trên ESP32-C3)
 #define MPU_I2C_ADDR          0x68   // Địa chỉ I2C mặc định
 
-#define MIN_BRIGHTNESS        5      // Độ sáng tối thiểu khi nghiêng
-#define MAX_BRIGHTNESS        75     // Độ sáng tối đa khi nghiêng (an toàn nguồn USB)
+#define MIN_BRIGHTNESS        5      // Độ sáng tối thiểu (5/255)
+#define MAX_BRIGHTNESS        255    // Độ sáng tối đa toàn dải (255/255) giữ trọn vẹn độ phân giải màu RGB
 #define MPU_TILT_AXIS         0      // 0: Trục Pitch (gật tới/lui), 1: Trục Roll (lắc trái/phải)
 #define INVERT_TILT_DIR       false  // true: Đảo chiều nghiêng tăng/giảm sáng
 
@@ -84,6 +84,9 @@
 // ============================================================================
 // 6. CẤU HÌNH QUẢN LÝ NGUỒN & SẠC PIN (MODULE IP2312)
 // ============================================================================
+// Mặc định false nếu cắm nguồn trực tiếp cổng Type-C của ESP32 (tránh chân GPIO 2 & 3
+// bị thả nổi thu nhiễu điện từ làm đèn nháy ngẫu nhiên màu xanh lục/cam báo sạc)
+#define ENABLE_BATTERY_MONITOR false 
 #define PIN_VBUS              2      // Tuyến phát hiện cắm nguồn 5V USB (GPIO 2 - ADC1_CH2 trên ESP32-C3)
 #define PIN_CHG_STAT          3      // Tuyến phát hiện LED đỏ IP2312 (GPIO 3 - ADC1_CH3 trên ESP32-C3)
 #define CHG_STAT_ACTIVE_LOW   false  // false: Active HIGH (Đèn tắt = 0V, Đèn sáng = >700mV)

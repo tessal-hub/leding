@@ -470,11 +470,15 @@ void effectWaterPhysics(uint32_t durationMs) {
       }
 
       velocity[x] *= 0.93f;
+      velocity[x] = constrain(velocity[x], -2.0f, 2.0f);
     }
 
     for (int x = 0; x < MATRIX_WIDTH; x++) {
       surfaceY[x] += velocity[x];
       surfaceY[x] = constrain(surfaceY[x], 0.6f, 6.8f);
+      if ((surfaceY[x] <= 0.65f && velocity[x] < 0) || (surfaceY[x] >= 6.75f && velocity[x] > 0)) {
+        velocity[x] = -velocity[x] * 0.25f;
+      }
     }
 
     if (jerk > 0.45f) {
@@ -494,14 +498,18 @@ void effectWaterPhysics(uint32_t durationMs) {
 
     for (int x = 0; x < MATRIX_WIDTH; x++) {
       int waterTop = (int)round(surfaceY[x]);
+      if (waterTop < 0) waterTop = 0;
+      if (waterTop >= MATRIX_HEIGHT) waterTop = MATRIX_HEIGHT - 1;
+
       int left = (x - 1 + MATRIX_WIDTH) % MATRIX_WIDTH;
       int right = (x + 1) % MATRIX_WIDTH;
       float slope = surfaceY[right] - surfaceY[left];
-      float specular = sin01(slope * 1.8f + nowMs * 0.004f);
+      float specular = sin01(slope * 1.8f + (float)(nowMs & 0xFFFF) * 0.004f);
 
       for (int y = MATRIX_HEIGHT - 1; y >= waterTop; y--) {
         uint32_t waterColor;
         float depth = (float)(y - waterTop) / (float)(MATRIX_HEIGHT - waterTop + 0.01f);
+        depth = constrain(depth, 0.0f, 1.0f);
 
         if (y == waterTop) {
           if (fabsf(velocity[x]) > 0.15f || jerk > 0.3f) {
@@ -518,7 +526,7 @@ void effectWaterPhysics(uint32_t durationMs) {
           waterColor = lerpColor(strip.Color(0, 115, 230), strip.Color(0, 30, 160), depth);
         }
 
-        setPixelXY(x, y, strip.gamma32(waterColor));
+        setPixelXY(x, y, waterColor);
       }
     }
 
@@ -530,9 +538,13 @@ void effectWaterPhysics(uint32_t durationMs) {
         int dx = (int)round(droplets[d].x);
         int dy = (int)round(droplets[d].y);
 
-        if (dy >= 0 && dy < MATRIX_HEIGHT && dy < (int)surfaceY[dx]) {
-          setPixelXY(dx, dy, strip.gamma32(strip.Color(240, 255, 255)));
-        } else if (dy >= (int)surfaceY[dx]) {
+        if (dx >= 0 && dx < MATRIX_WIDTH) {
+          if (dy >= 0 && dy < MATRIX_HEIGHT && dy < (int)surfaceY[dx]) {
+            setPixelXY(dx, dy, strip.Color(240, 255, 255));
+          } else if (dy >= (int)surfaceY[dx]) {
+            droplets[d].active = false;
+          }
+        } else {
           droplets[d].active = false;
         }
       }
