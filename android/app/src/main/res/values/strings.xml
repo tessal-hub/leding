@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">LED 360 Lamp</string>
+    <string name="notification_listener_label">LED 360 Notification Bridge</string>
+    <string name="widget_label">LED 360 Control Widget</string>
+    <string name="widget_tap_to_open">Chạm để Mở App</string>
+    <string name="widget_power_toggle">Bật/Tắt Nguồn</string>
 </resources>

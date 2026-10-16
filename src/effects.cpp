@@ -4,34 +4,6 @@
 #include "uart_debug.h"
 #include <Wire.h>
 
-/**
- * ============================================================================
- * HIỆU ỨNG DÒ HƯỚNG ĐI DÂY LED 0 -> 255 (LED ORDER CALIBRATION TEST)
- * ============================================================================
- * Hiệu ứng này chạy tuần tự qua từng bóng LED theo chỉ số vật lý thực (index):
- * - Tấm 1: LED 0 -> 63    (Vệt màu Đỏ)
- * - Tấm 2: LED 64 -> 127   (Vệt màu Xanh Lá)
- * - Tấm 3: LED 128 -> 191  (Vệt màu Xanh Dương)
- * - Tấm 4: LED 192 -> 255  (Vệt màu Vàng)
- * 
- * Bóng LED hiện tại luôn sáng trắng rực rỡ để bạn nhìn rõ:
- * 1. Chân DIN bắt đầu từ góc nào của tấm 1?
- * 2. LED 1, 2, 3 đi ngang (Row) hay đi dọc (Col)?
- * 3. Hàng thứ 2 có quay đầu zic-zac (Serpentine) hay nhảy lại đầu hàng?
- */
-void effectLedOrderTest(uint16_t stepDelayMs) {
-  strip.clear();
-  for (int i = 0; i < NUM_LEDS; i++) {
-    uint8_t panel = i / 64;
-    uint32_t c = (panel == 0) ? strip.Color(90, 0, 0) : (panel == 1) ? strip.Color(0, 90, 0) : (panel == 2) ? strip.Color(0, 0, 90) : strip.Color(90, 90, 0);
-    if (i > 0) strip.setPixelColor(i - 1, c);
-    strip.setPixelColor(i, strip.Color(255, 255, 255));
-    strip.show();
-    if (delayWithTouch(stepDelayMs)) return;
-  }
-  delayWithTouch(400);
-}
-
 // ============================================================================
 // CÁC HÀM BỔ TRỢ TOÁN HỌC & NOISE (LIỀN MẠCH 360 ĐỘ QUANH HỘP VUÔNG)
 // ============================================================================
@@ -100,6 +72,117 @@ static uint32_t palette3(float v, uint32_t c0, uint32_t c1, uint32_t c2) {
 }
 
 // ============================================================================
+// MODE 8: BẦU TRỜI NGÀN SAO HẸN ƯỚC (COSMIC STARRY NIGHT ROMANCE)
+// Tinh vân tím vũ trụ trôi lững lờ 360°, ngàn sao đa cấp độ lấp lánh &
+// sao băng ước nguyện rực rỡ lướt qua để lại vệt đuôi ánh sáng lãng mạn.
+// ============================================================================
+void effectStarryNight(uint32_t durationMs) {
+  unsigned long start = millis();
+  const int NUM_STARS = 32;
+  struct Star {
+    uint8_t x;
+    uint8_t y;
+    float phase;
+    float speed;
+    uint32_t color;
+    bool isMajor;
+  };
+  Star stars[NUM_STARS];
+  for (int i = 0; i < NUM_STARS; i++) {
+    stars[i].x = random(0, MATRIX_WIDTH);
+    stars[i].y = random(0, MATRIX_HEIGHT);
+    stars[i].phase = (float)random(0, 628) / 100.0f;
+    stars[i].speed = 1.0f + (float)random(8, 28) / 10.0f;
+    uint8_t type = random(5);
+    // Tông màu sao lãng mạn: Trăng vàng mật ong, Hồng ngọc, Bạch kim pha lê, Tím pastel, Vàng Champagne
+    stars[i].color = (type == 0) ? strip.Color(255, 230, 150)
+                   : (type == 1) ? strip.Color(255, 155, 205)
+                   : (type == 2) ? strip.Color(240, 240, 255)
+                   : (type == 3) ? strip.Color(215, 175, 255)
+                                 : strip.Color(255, 215, 175);
+    stars[i].isMajor = (i < 4); // 4 ngôi sao sáng rực rỡ nhất vòm trời có hào quang
+  }
+
+  // Sao băng ước nguyện (Shooting star / comet) lướt qua vòm trời 360°
+  float shootX = -10.0f;
+  float shootY = 0.0f;
+  bool shootActive = false;
+  unsigned long nextShootingTime = millis() + random(2500, 5000);
+
+  // Bảng màu tinh vân vũ trụ (Cosmic Violet Nebula): không bao giờ để nền đen chết chóc
+  const uint32_t cNebulaDark   = strip.Color(16, 5, 36);  // Tím than vũ trụ sâu thẳm
+  const uint32_t cNebulaViolet = strip.Color(42, 12, 68); // Tím phong lan huyền bí
+  const uint32_t cNebulaPlum   = strip.Color(62, 16, 56); // Bụi khí hồng rượu vang ấm áp
+
+  while (millis() - start < durationMs) {
+    float t = (millis() - start) / 1000.0f;
+
+    // 1. Vẽ nền trời đêm tinh vân vũ trụ huyền ảo, trôi êm ái liền mạch 360°
+    for (int y = 0; y < MATRIX_HEIGHT; y++) {
+      for (int x = 0; x < MATRIX_WIDTH; x++) {
+        // Dùng noise 3D tuần hoàn quanh chu vi trụ (period = 4)
+        float n = noise3((float)x * 0.125f, (float)y * 0.25f, t * 0.09f, 4);
+        uint32_t skyCol = palette3(n, cNebulaDark, cNebulaViolet, cNebulaPlum);
+        setPixelXY(x, y, strip.gamma32(skyCol));
+      }
+    }
+
+    // 2. Các vì sao tình yêu lấp lánh lung linh
+    for (int i = 0; i < NUM_STARS; i++) {
+      float b = sin01(t * stars[i].speed + stars[i].phase);
+      float bri = b * b * b; // Đường cong phi tuyến giúp sao nhấp nháy tự nhiên
+      if (bri > 0.03f) {
+        uint32_t starCol = strip.gamma32(scaleColor(stars[i].color, bri));
+        setPixelXY(stars[i].x, stars[i].y, starCol);
+
+        // Với các ngôi sao lớn (Major stars), khi đạt độ sáng cao -> tỏa hào quang chữ thập 4 hướng
+        if (stars[i].isMajor && bri > 0.45f) {
+          float haloBri = (bri - 0.45f) * 0.45f;
+          uint32_t haloCol = strip.gamma32(scaleColor(stars[i].color, haloBri));
+          setPixelXY((uint8_t)wrapCylinderX((float)stars[i].x - 1), stars[i].y, haloCol);
+          setPixelXY((uint8_t)wrapCylinderX((float)stars[i].x + 1), stars[i].y, haloCol);
+          if (stars[i].y > 0) setPixelXY(stars[i].x, stars[i].y - 1, haloCol);
+          if (stars[i].y < MATRIX_HEIGHT - 1) setPixelXY(stars[i].x, stars[i].y + 1, haloCol);
+        }
+      }
+    }
+
+    // 3. Sao băng ước nguyện (Comet) lướt nhẹ qua vòm trời 360°
+    if (!shootActive && millis() > nextShootingTime) {
+      shootActive = true;
+      shootX = (float)random(0, MATRIX_WIDTH);
+      shootY = 0.0f;
+    }
+
+    if (shootActive) {
+      // Vệt đuôi sao băng lộng lẫy (6 pixel kéo dài)
+      for (int trail = 5; trail >= 0; trail--) {
+        float tx = shootX - trail * 0.95f;
+        int ty = (int)round(shootY - trail * 0.40f);
+        if (ty >= 0 && ty < MATRIX_HEIGHT) {
+          uint8_t px = (uint8_t)wrapCylinderX(tx);
+          float tailFactor = 1.0f - ((float)trail / 6.0f);
+          // Đầu sao băng: Trắng kim cương rực rỡ -> Thân: Vàng mật ong -> Đuôi: Tím hồng bụi tiên
+          uint32_t cometCol = (trail == 0) ? strip.Color(255, 255, 245)
+                            : (trail <= 2) ? strip.Color(255, 220, 170)
+                                           : strip.Color(215, 140, 255);
+          setPixelXY(px, ty, strip.gamma32(scaleColor(cometCol, tailFactor * 0.95f)));
+        }
+      }
+      shootX += 0.95f;
+      shootY += 0.40f;
+      if (shootY >= MATRIX_HEIGHT + 3) {
+        shootActive = false;
+        nextShootingTime = millis() + random(3500, 7500);
+      }
+    }
+
+    showDisplay();
+    if (delayWithTouch(28)) return;
+  }
+}
+
+// ============================================================================
 // 1. SÓNG NHỊP 4 MẶT HỘP (FACE WAVE - MỖI MẶT 1 NHỊP LỆCH PHA)
 // ============================================================================
 void effectFaceWave(uint32_t durationMs) {
@@ -109,10 +192,10 @@ void effectFaceWave(uint32_t durationMs) {
   const float FACE_W = (float)MATRIX_WIDTH / FACES;
 
   const uint32_t pal[FACES] = {
-    strip.Color(0, 200, 255),     // cyan
-    strip.Color(120, 60, 255),    // tím
-    strip.Color(255, 60, 160),    // hồng
-    strip.Color(255, 150, 50)     // cam
+    strip.Color(255, 45, 95),     // Đỏ hoa hồng nhung (Crimson Rose)
+    strip.Color(135, 45, 230),    // Tím mộng mơ (Romantic Violet)
+    strip.Color(255, 60, 160),    // Hồng cánh sen (Blush Pink)
+    strip.Color(255, 140, 50)     // Cam đào hoàng hôn (Sunset Peach)
   };
 
   while (millis() - start < durationMs) {
@@ -140,101 +223,61 @@ void effectFaceWave(uint32_t durationMs) {
         setPixelXY(x, y, strip.gamma32(scaleColor(base, constrain(bri * v, 0.0f, 1.0f))));
       }
     }
-    strip.show();
+    showDisplay();
     t += 0.045f;
     if (delayWithTouch(25)) return;
   }
 }
 
 // ============================================================================
-// 2. ĐÈN VIỀN 4 CẠNH GÓC HỘP (EDGE LIGHT - TỐI GIẢN CAO CẤP)
+// MODE 3: ÁNH NẾN HẸN HÒ LUNG LINH (CANDLELIGHT ROMANCE - LÃNG MẠN ẤM ÁP)
 // ============================================================================
-void effectEdgeLight(uint32_t durationMs) {
+void effectCandlelight(uint32_t durationMs) {
   unsigned long start = millis();
-  const uint32_t coolWhite = strip.Color(150, 195, 255);  // Trắng lạnh băng thanh
-  const uint32_t warmWhite = strip.Color(255, 215, 160);  // Trắng ấm sang trọng
-  const uint32_t fillCol   = strip.Color(10, 0, 40);      // Nền tím rất tối
-
-  // Tần số và độ lệch pha nhịp thở riêng biệt cho từng cạnh của hộp
-  const float edgeFreq[4]  = { 1.05f, 1.25f, 0.95f, 1.18f };
-  const float edgePhase[4] = { 0.00f, 1.80f, 3.40f, 5.10f };
+  const uint32_t cCandleGlow = strip.Color(255, 110, 15); // Cam lửa mật ong ấm áp
+  const uint32_t cCandleCore = strip.Color(255, 210, 90); // Vàng sáng tâm ngọn nến
+  const uint32_t cBaseAmber  = strip.Color(160, 40, 5);   // Đỏ cam hổ phách chân nến
+  const uint32_t cBgWarm     = strip.Color(15, 2, 4);     // Không gian tối ấm áp quanh nến
 
   while (millis() - start < durationMs) {
     float t = (millis() - start) / 1000.0f;
 
-    // Chuyển dịch nhiệt độ màu êm dịu theo thời gian (Cool White <-> Warm White)
-    float tempShift = sin01(t * 0.30f);
-    uint32_t curEdgeCol = lerpColor(coolWhite, warmWhite, tempShift);
-
     for (int x = 0; x < MATRIX_WIDTH; x++) {
-      // Khoảng cách tới cạnh gần nhất (cạnh nằm ở x = 0, 8, 16, 24; wrap quanh hộp)
-      float local = fmodf(x + 0.5f, MATRIX_WIDTH / 4.0f);              // 0..8 trong một mặt
-      float d = fminf(local, (MATRIX_WIDTH / 4.0f) - local);           // 0 tại cạnh
-      float glow = expf(-d * 0.9f);                                    // Vệt sáng tắt dần vào trong mặt
-      int edgeIdx = (int)((x + 0.5f) / (MATRIX_WIDTH / 4.0f + 0.0001f) + 0.5f) % 4;
+      // 4 ngọn nến tại 4 tâm mặt (x = 3.5, 11.5, 19.5, 27.5)
+      float faceX = fmodf((float)x, 8.0f);
+      float distToFlame = fabsf(faceX - 3.5f);
+      float flameShape = expf(-distToFlame * 0.65f);
 
-      // Nhịp thở hữu cơ riêng cho từng cạnh góc
-      float b = sin01(t * edgeFreq[edgeIdx] + edgePhase[edgeIdx]);
-      float edgeBreath = 0.25f + 0.75f * b * b;
+      // Bập bùng ngọn lửa hữu cơ bằng sóng sin đa tần
+      float flicker = 0.72f + 0.28f * sin01(t * 8.5f + x * 1.7f);
+      flicker += 0.12f * (sin01(t * 19.0f + x * 3.1f) - 0.5f);
+      flicker = constrain(flicker, 0.45f, 1.15f);
 
       for (int y = 0; y < MATRIX_HEIGHT; y++) {
-        // Nhịp chạy dọc theo cạnh với chu kỳ sóng mượt
-        float run = 0.65f + 0.35f * sinsf(t * 2.1f + y * 0.55f + edgeIdx * 1.57f);
-        uint32_t c = lerpColor(fillCol, scaleColor(curEdgeCol, edgeBreath * run), glow);
-        setPixelXY(x, y, strip.gamma32(c));
-      }
-    }
-    strip.show();
-    if (delayWithTouch(25)) return;
-  }
-}
+        // Ngọn lửa nến từ đáy (hàng 7) vươn lên đỉnh (hàng 0)
+        float heightFactor = (float)(7 - y) / 7.0f;
+        float flameGlow = flameShape * (0.35f + 0.65f * (1.0f - heightFactor * 0.45f));
+        flameGlow *= flicker;
 
-// ============================================================================
-// 3. ĐÈN DUNG NHAM 3D NOISE LIỀN MẠCH (LAVA NOISE - 4 BLOB TRÊN 4 MẶT)
-// ============================================================================
-void effectLavaNoise(uint32_t durationMs) {
-  unsigned long start = millis();
-  float t = 0.0f;
-  const int CELLS = 4;  // 4 ô tương ứng 4 mặt của hộp vuông
-
-  const uint32_t c0 = strip.Color(5, 0, 25);       // Gần đen tím obsidian
-
-  while (millis() - start < durationMs) {
-    // Xoay chuyển dải màu nhẹ nhàng theo thời gian (rotating palette hue)
-    float hueRot = t * 0.12f;
-    float h1 = sin01(hueRot);
-    float h2 = cos01(hueRot * 0.85f);
-    uint32_t curC1 = lerpColor(strip.Color(160, 20, 130), strip.Color(210, 30, 65), h1);  // Magenta sâu <-> Đỏ rực
-    uint32_t curC2 = lerpColor(strip.Color(255, 130, 45), strip.Color(255, 195, 65), h2); // Cam nham thạch <-> Vàng hổ phách
-
-    for (int y = 0; y < MATRIX_HEIGHT; y++) {
-      for (int x = 0; x < MATRIX_WIDTH; x++) {
-        float nx = (float)x * CELLS / MATRIX_WIDTH;
-        float n1 = noise3(nx,        y * 0.35f,        t,        CELLS);
-        float n2 = noise3(nx * 2.0f, y * 0.7f + 5.0f,  t * 1.6f, CELLS * 2);
-        float n  = n1 * 0.7f + n2 * 0.3f;
-
-        // Đẩy tương phản để tạo "blob" dung nham rõ nét, nền tối sâu
-        n = smooth01(constrain((n - 0.30f) * 1.9f, 0.0f, 1.0f));
-        uint32_t pixelCol = palette3(n, c0, curC1, curC2);
-
-        // Đốm lấp lánh (sparkle overlay) tinh tế trên các đỉnh dung nham nóng sáng rực
-        if (n > 0.72f && (random(100) < 18)) {
-          float sparkleBri = ((float)random(30, 80) / 100.0f) * (n - 0.72f) * 3.5f;
-          pixelCol = lerpColor(pixelCol, strip.Color(255, 250, 230), constrain(sparkleBri, 0.0f, 0.75f));
+        uint32_t col;
+        if (flameGlow > 0.75f) {
+          col = lerpColor(cCandleGlow, cCandleCore, (flameGlow - 0.75f) / 0.25f);
+        } else {
+          col = lerpColor(cBaseAmber, cCandleGlow, flameGlow / 0.75f);
         }
+        col = lerpColor(cBgWarm, col, constrain(flameGlow, 0.0f, 1.0f));
 
-        setPixelXY(x, y, strip.gamma32(pixelCol));
+        setPixelXY(x, y, strip.gamma32(col));
       }
     }
-    strip.show();
-    t += 0.018f;               // Chậm = sang; nhanh = rối
-    if (delayWithTouch(25)) return;
+
+    showDisplay();
+    if (delayWithTouch(30)) return;
   }
 }
 
 // ============================================================================
-// 4. ĐÈN NGHIÊNG DÍNH CHIỀU NGHIÊNG & BỪNG SÁNG KHI LẮC (TILT GLOW MPU)
+// 4. CỬ CHỈ YÊU THƯƠNG MPU (LOVE TILT & CARESS - ÁNH SÁNG ÂU YẾM)
 // ============================================================================
 void effectTiltGlow(uint32_t durationMs) {
   unsigned long start = millis();
@@ -246,9 +289,9 @@ void effectTiltGlow(uint32_t durationMs) {
   // Bộ đệm lưu vệt sáng dư quang (trailing afterglow buffer)
   float trail[MATRIX_WIDTH][MATRIX_HEIGHT] = { {0.0f} };
 
-  const uint32_t cA = strip.Color(0, 200, 255);
-  const uint32_t cB = strip.Color(160, 60, 255);
-  const uint32_t cWhiteBurst = strip.Color(255, 255, 255);
+  const uint32_t cA = strip.Color(255, 50, 120);       // Hồng cánh sen rực rỡ
+  const uint32_t cB = strip.Color(255, 140, 50);       // Cam đào mật ong ấm áp
+  const uint32_t cWhiteBurst = strip.Color(255, 230, 240); // Ánh hào quang hồng ngọc khi lắc
 
   while (millis() - start < durationMs) {
     int16_t ax, ay, az;
@@ -272,13 +315,14 @@ void effectTiltGlow(uint32_t durationMs) {
       for (int x = 0; x < MATRIX_WIDTH; x++) {
         float a = (x * 2.0f * PI) / MATRIX_WIDTH;
         float facing = cos01(a - angle);            // 1 = hướng đang nghiêng tới
-        float targetGlow = (facing * facing) * (0.25f + 0.75f * tilt); // Bình phương số nguyên, rẻ cho 32 cột
+        float tiltBoost = (facing * facing) * (0.35f + 0.65f * tilt);
+        // Nền thở ấm áp tự nhiên (38% - 50% độ sáng) khi đặt đèn nằm yên trên bàn
+        float baseAmbient = 0.38f + 0.12f * sin01(t * 1.4f + x * 0.25f);
+        float targetGlow = fmaxf(baseAmbient, tiltBoost);
 
         // Cập nhật vệt dư quang mượt mà (trailing afterglow effect)
         trail[x][y] = trail[x][y] * 0.78f + targetGlow * 0.26f;
         float glow = fmaxf(targetGlow, trail[x][y]);
-
-        glow += 0.05f + 0.04f * sinsf(t + x * 0.3f);                // Nền "thở" rất nhẹ
 
         float mix = sin01(a * 0.5f - angle + y * 0.25f);
         uint32_t col = scaleColor(lerpColor(cA, cB, mix), constrain(glow, 0.0f, 1.0f));
@@ -292,24 +336,24 @@ void effectTiltGlow(uint32_t durationMs) {
         setPixelXY(x, y, strip.gamma32(col));
       }
     }
-    strip.show();
+    showDisplay();
     t += 0.05f;
     if (delayWithTouch(20)) return;
   }
 }
 
 // ============================================================================
-// 5. DẢI CỰC QUANG UỐN LƯỢN (AURORA FLOW - TÍM, CYAN, XANH LỤC & HỒNG)
+// 7. CỰC QUANG TÌNH NHÂN (LOVER'S AURORA - TÍM MỘNG MƠ & HỒNG CÁNH SEN)
 // ============================================================================
 static inline uint32_t auroraMultiPalette(float v) {
   v = fmodf(v, 1.0f);
   if (v < 0.0f) v += 1.0f;
-  if (v < 0.30f) {
-    return lerpColor(strip.Color(110, 25, 245), strip.Color(0, 220, 210), v / 0.30f); // Tím sâu -> Cyan ngọc
-  } else if (v < 0.65f) {
-    return lerpColor(strip.Color(0, 220, 210), strip.Color(25, 255, 115), (v - 0.30f) / 0.35f); // Cyan -> Xanh lục cực quang
+  if (v < 0.35f) {
+    return lerpColor(strip.Color(130, 15, 210), strip.Color(245, 40, 130), v / 0.35f); // Tím mộng mơ -> Hồng cánh sen
+  } else if (v < 0.70f) {
+    return lerpColor(strip.Color(245, 40, 130), strip.Color(255, 130, 80), (v - 0.35f) / 0.35f); // Hồng cánh sen -> Cam đào hoàng hôn
   } else {
-    return lerpColor(strip.Color(25, 255, 115), strip.Color(255, 70, 160), (v - 0.65f) / 0.35f); // Xanh lục -> Hồng cực quang
+    return lerpColor(strip.Color(255, 130, 80), strip.Color(180, 25, 160), (v - 0.70f) / 0.30f); // Cam đào -> Tím hồng hoàng hôn
   }
 }
 
@@ -339,218 +383,325 @@ void effectAurora(uint32_t durationMs) {
         setPixelXY(x, y, strip.gamma32(scaleColor(col, bri)));
       }
     }
-    strip.show();
+    showDisplay();
     t += 0.035f;
     if (delayWithTouch(25)) return;
   }
 }
 
 // ============================================================================
-// 6. NHỊP THỞ TỐI GIẢN (BREATHING GRADIENT - CAM SAN HÔ & HỒNG TÍM)
+// MODE 6: BIỂN HOA OẢI HƯƠNG TÍM (LAVENDER TWILIGHT BREEZE)
+// Cánh đồng oải hương tím ngát dập dờn trong làn gió hoàng hôn dịu êm,
+// từng nhịp sóng hoa tím biếc đung đưa cùng những chú đom đóm tím lơ lửng.
 // ============================================================================
-void effectBreathingGradient(uint32_t durationMs) {
+void effectLavenderBreeze(uint32_t durationMs) {
   unsigned long start = millis();
-  const uint32_t cA = strip.Color(255, 90, 60);    // Cam san hô
-  const uint32_t cB = strip.Color(200, 40, 150);   // Hồng tím pastel
-  const float CYCLE_SEC = 5.2f;                    // Chu kỳ thở tự nhiên ~5.2s
+
+  // Bảng màu cánh đồng oải hương hoàng hôn
+  const uint32_t cTwilightSky    = strip.Color(26, 12, 54);   // Bầu trời chạng vạng tím chàm
+  const uint32_t cLavenderShadow = strip.Color(48, 14, 76);   // Tím mận sâu lắng dưới gốc hoa
+  const uint32_t cLavenderBloom  = strip.Color(162, 62, 235); // Hoa oải hương tím biếc nở rộ
+  const uint32_t cPastelLilac    = strip.Color(225, 145, 255);// Sắc tím phấn pastel đón gió
+  const uint32_t cFireflyGlow    = strip.Color(255, 225, 255);// Đom đóm tím bạch kim ấm áp
+
+  // 4 chú đom đóm tím mộng mơ bay lượn trên cánh đồng
+  struct Firefly {
+    float baseX;
+    float phase;
+    float speedX;
+    float speedY;
+    float pulseSpeed;
+  };
+  Firefly fireflies[4] = {
+    { 4.0f,  0.5f, 0.45f, 0.65f, 2.2f },
+    { 12.0f, 2.1f, -0.38f, 0.75f, 1.8f },
+    { 20.0f, 4.3f, 0.50f, 0.55f, 2.5f },
+    { 28.0f, 5.8f, -0.42f, 0.80f, 2.0f }
+  };
 
   while (millis() - start < durationMs) {
-    float phase = (millis() - start) / 1000.0f;
-    float normCycle = fmodf(phase, CYCLE_SEC) / CYCLE_SEC; // 0.0 -> 1.0
+    float t = (millis() - start) / 1000.0f;
 
-    // Nhịp thở tự nhiên bất đối xứng: Hít vào nhanh hơn (~36%), Thở ra chậm rãi (~64%)
-    float breath;
-    if (normCycle < 0.36f) {
-      // Hít vào (Inhale): dâng lên êm ái
-      breath = smooth01(normCycle / 0.36f);
-    } else {
-      // Thở ra (Exhale): hạ dần thư thái
-      breath = 1.0f - smooth01((normCycle - 0.36f) / 0.64f);
-    }
-    breath = 0.14f + 0.86f * powf(breath, 1.35f);
+    // Gió thổi tuần hoàn quanh vòng trụ 360°
+    float windOffset = t * 1.5f;
 
     for (int y = 0; y < MATRIX_HEIGHT; y++) {
+      // Tỷ lệ độ cao từ gốc (y=0) lên ngọn/trời (y=7)
+      float normY = (float)y / (MATRIX_HEIGHT - 1.0f);
+
       for (int x = 0; x < MATRIX_WIDTH; x++) {
-        float a = (x * 2.0f * PI) / MATRIX_WIDTH;
-        float g = sin01(a + phase * 0.4f);
+        float theta = (x * 2.0f * PI) / MATRIX_WIDTH;
 
-        // Thêm hạt texture noise vi mô phá vỡ dải sọc gradient đồng đều
-        float nx = (float)x / 8.0f;
-        float texNoise = noise3(nx, y * 0.4f, phase * 0.25f, 4);
-        float texMod = 1.0f + (texNoise - 0.5f) * 0.12f; // Thay đổi +/- 6% tinh tế
+        // 1. Làn gió lay động sóng hoa oải hương (3 cụm sóng lướt quanh chu vi)
+        float windSway = sin01(theta * 3.0f - windOffset + sinsf((float)y * 0.7f + t * 0.8f) * 1.1f);
 
-        float finalBri = constrain(breath * texMod, 0.0f, 1.0f);
-        setPixelXY(x, y, strip.gamma32(scaleColor(lerpColor(cA, cB, g), finalBri)));
+        // 2. Độ nở rộ hoa oải hương: đậm đặc ở tầng trung và thấp (y = 1..5)
+        float bloomLayer = 1.0f - fabsf(normY - 0.42f) / 0.55f;
+        bloomLayer = constrain(bloomLayer, 0.0f, 1.0f);
+        float bloomIntensity = powf(windSway, 1.5f) * bloomLayer;
+
+        // Nội suy màu sắc: Nền chạng vạng -> Gốc tím mận -> Hoa nở rộ -> Ngọn tím phấn
+        uint32_t baseCol = lerpColor(cTwilightSky, cLavenderShadow, (1.0f - normY) * 0.7f);
+        uint32_t flowerCol = lerpColor(cLavenderBloom, cPastelLilac, windSway);
+        uint32_t col = lerpColor(baseCol, flowerCol, bloomIntensity * 0.88f);
+
+        // Thêm chuyển động nhịp thở nhẹ nhàng của buổi chiều tà
+        float ambientBreath = 0.82f + 0.18f * sin01(t * 0.8f + (float)x * 0.1f);
+        col = scaleColor(col, ambientBreath);
+
+        setPixelXY(x, y, strip.gamma32(col));
       }
     }
-    strip.show();
-    if (delayWithTouch(20)) return;
+
+    // 3. Đom đóm tím lơ lửng dạo chơi trên biển hoa
+    for (int i = 0; i < 4; i++) {
+      float fx = wrapCylinderX(fireflies[i].baseX + fireflies[i].speedX * t * 4.0f + 2.5f * sinsf(t * fireflies[i].speedY + fireflies[i].phase));
+      float fy = 2.5f + 2.0f * cossf(t * fireflies[i].speedY * 1.2f + fireflies[i].phase);
+      float pulse = powf(sin01(t * fireflies[i].pulseSpeed + fireflies[i].phase), 2.5f);
+
+      if (pulse > 0.08f) {
+        int ix = (int)round(fx);
+        int iy = (int)round(fy);
+        if (iy >= 0 && iy < MATRIX_HEIGHT) {
+          uint8_t px = (uint8_t)wrapCylinderX((float)ix);
+          uint32_t ffCol = strip.gamma32(scaleColor(cFireflyGlow, pulse * 0.95f));
+          setPixelXY(px, iy, ffCol);
+
+          // Hào quang tím nhạt lan nhẹ sang pixel lân cận
+          if (pulse > 0.5f) {
+            float halo = (pulse - 0.5f) * 0.4f;
+            uint32_t haloCol = strip.gamma32(scaleColor(cPastelLilac, halo));
+            setPixelXY((uint8_t)wrapCylinderX((float)px - 1), iy, haloCol);
+            setPixelXY((uint8_t)wrapCylinderX((float)px + 1), iy, haloCol);
+          }
+        }
+      }
+    }
+
+    showDisplay();
+    if (delayWithTouch(26)) return;
   }
 }
 
 // ============================================================================
 // CHẠY CHỮ 360° QUANH TRỤ: KHUNG CHỮ 6x8 (BỎ 2 HÀNG BIÊN TRÊN/DƯỚI)
 // ============================================================================
+static char g_marqueeText[128] = "LOVE * YOU";
+static uint32_t g_marqueeColor = 0; // 0 = Cyan mặc định
+static uint16_t g_marqueeSpeed = 125; // 125ms mặc định (~8 col/s, rất êm và dễ đọc)
+
+void setMarqueeState(const char* text, uint32_t color, uint16_t speedDelay) {
+  if (text != NULL && strlen(text) > 0) {
+    strncpy(g_marqueeText, text, sizeof(g_marqueeText) - 1);
+    g_marqueeText[sizeof(g_marqueeText) - 1] = '\0';
+  }
+  if (color != 0) {
+    g_marqueeColor = color;
+  }
+  if (speedDelay >= 40 && speedDelay <= 500) {
+    g_marqueeSpeed = speedDelay;
+  }
+}
+
+void getMarqueeState(char* text, size_t maxLen, uint32_t &color, uint16_t &speedDelay) {
+  if (text != NULL && maxLen > 0) {
+    strncpy(text, g_marqueeText, maxLen - 1);
+    text[maxLen - 1] = '\0';
+  }
+  color = (g_marqueeColor != 0) ? g_marqueeColor : strip.Color(0, 220, 255);
+  speedDelay = (g_marqueeSpeed >= 40 && g_marqueeSpeed <= 500) ? g_marqueeSpeed : 125;
+}
+
+// Hàm nội bộ render 1 khung hình dải ruy băng chữ 360° khép kín quanh trụ
+static void renderMarqueeRibbonFrame(const char* cleanText, size_t textLen, uint16_t loopWidth, uint32_t step, uint32_t color) {
+  const uint8_t CHAR_WIDTH = 6;
+  uint16_t textPixelWidth = (uint16_t)(textLen * CHAR_WIDTH);
+
+  for (uint8_t screenX = 0; screenX < MATRIX_WIDTH; screenX++) {
+    // Quấn chu kỳ 360 độ khép kín:
+    uint16_t ribbonX = (screenX + step) % loopWidth;
+    if (ribbonX < textPixelWidth) {
+      uint8_t charIdx = ribbonX / CHAR_WIDTH;
+      uint8_t colInChar = ribbonX % CHAR_WIDTH;
+      if (colInChar < 5) {
+        uint8_t colBits = getCharColBits(cleanText[charIdx], colInChar);
+        for (uint8_t r = 0; r < 6; r++) {
+          setPixelXY(screenX, 1 + r, ((colBits >> r) & 0x01) ? color : 0);
+        }
+      } else {
+        // Cột khoảng trắng 1 pixel giữa các ký tự
+        for (uint8_t r = 1; r <= 6; r++) setPixelXY(screenX, r, 0);
+      }
+    } else {
+      // Khoảng trắng giữa các vòng lặp tin nhắn
+      for (uint8_t r = 1; r <= 6; r++) setPixelXY(screenX, r, 0);
+    }
+    // Hàng 0 và hàng 7 để trống viền tinh tế
+    setPixelXY(screenX, 0, 0);
+    setPixelXY(screenX, 7, 0);
+  }
+}
+
 void effectCylinderScrollText(const char* text, uint32_t color, uint16_t speedDelay) {
   if (text == NULL || strlen(text) == 0) return;
-  size_t len = strlen(text);
-  const uint8_t CHAR_WIDTH = 6; // Khung 6x8: 5 cột chữ + 1 cột khoảng cách
-  int16_t totalPixelWidth = (int16_t)(len * CHAR_WIDTH);
+  char cleanText[128];
+  sanitizeTextForDisplay(text, cleanText, sizeof(cleanText));
+  size_t len = strlen(cleanText);
+  if (len == 0) return;
 
-  for (int16_t offset = MATRIX_WIDTH; offset > -totalPixelWidth; offset--) {
-    strip.clear();
-    for (size_t i = 0; i < len; i++) {
-      int16_t charX = offset + (i * CHAR_WIDTH);
-      if (charX > -CHAR_WIDTH && charX < MATRIX_WIDTH) {
-        drawCharCylinder(charX, text[i], color);
-      }
-    }
-    strip.show();
+  const uint8_t CHAR_WIDTH = 6;
+  const uint8_t GAP_COLS = 8;
+  uint16_t textPixelWidth = (uint16_t)(len * CHAR_WIDTH);
+  uint16_t loopWidth = textPixelWidth + GAP_COLS;
+  if (loopWidth < MATRIX_WIDTH) {
+    loopWidth = MATRIX_WIDTH;
+  }
+
+  if (color == 0) color = strip.Color(0, 220, 255);
+  if (speedDelay < 40 || speedDelay > 500) speedDelay = 125;
+
+  // Cuộn tối thiểu 2 chu kỳ hoàn chỉnh quanh trụ
+  uint32_t totalSteps = (uint32_t)loopWidth * 2;
+  for (uint32_t step = 0; step < totalSteps; step++) {
+    renderMarqueeRibbonFrame(cleanText, len, loopWidth, step, color);
+    showDisplay();
     if (delayWithTouch(speedDelay)) return;
   }
 }
 
-void effectWaterPhysics(uint32_t durationMs) {
-  Serial.println("[Effect] Nước chảy & Vật lý sóng xô lệch MPU");
-  unsigned long start = millis();
-
-  float surfaceY[MATRIX_WIDTH];
-  float velocity[MATRIX_WIDTH];
-  for (int x = 0; x < MATRIX_WIDTH; x++) {
-    surfaceY[x] = 4.0f;
-    velocity[x] = 0.0f;
+// Mode 13: Chạy chữ 360° lãng mạn liên tục quanh thân đèn
+void effectMarqueeMode(uint32_t durationMs) {
+  char cleanText[128];
+  sanitizeTextForDisplay(g_marqueeText, cleanText, sizeof(cleanText));
+  size_t len = strlen(cleanText);
+  if (len == 0) {
+    strcpy(cleanText, "LOVE * YOU");
+    len = strlen(cleanText);
   }
 
-  struct Droplet {
-    bool active;
+  const uint8_t CHAR_WIDTH = 6;
+  const uint8_t GAP_COLS = 8;
+  uint16_t textPixelWidth = (uint16_t)(len * CHAR_WIDTH);
+  uint16_t loopWidth = textPixelWidth + GAP_COLS;
+  if (loopWidth < MATRIX_WIDTH) {
+    loopWidth = MATRIX_WIDTH;
+  }
+
+  uint32_t color = (g_marqueeColor != 0) ? g_marqueeColor : strip.Color(0, 220, 255);
+  uint16_t speedDelay = (g_marqueeSpeed >= 40 && g_marqueeSpeed <= 500) ? g_marqueeSpeed : 125;
+
+  unsigned long start = millis();
+  uint32_t step = 0;
+
+  while (durationMs == 0 || (millis() - start < durationMs)) {
+    renderMarqueeRibbonFrame(cleanText, len, loopWidth, step, color);
+    showDisplay();
+
+    step = (step + 1) % loopWidth;
+    if (delayWithTouch(speedDelay)) return;
+  }
+}
+
+// ============================================================================
+// MODE 5: LỬA ẤM ĐÊM ĐÔNG (COZY FIREPLACE ROMANCE - LÒ SƯỞI ẤM ÁP TÌNH NỒNG)
+// ============================================================================
+void effectCozyFireplace(uint32_t durationMs) {
+  unsigned long start = millis();
+
+  // Các đốm tàn than hồng lách tách bay lên trời đêm 360 độ
+  struct FireEmber {
     float x;
     float y;
     float vy;
+    float vx;
+    float life;
   };
-  const int MAX_DROPLETS = 8;
-  Droplet droplets[MAX_DROPLETS];
-  for (int d = 0; d < MAX_DROPLETS; d++) droplets[d].active = false;
+  const int NUM_EMBERS = 14;
+  FireEmber embers[NUM_EMBERS];
+  for (int i = 0; i < NUM_EMBERS; i++) {
+    embers[i].x = (float)random(0, MATRIX_WIDTH);
+    embers[i].y = (float)random(4, 8);
+    embers[i].vy = 0.05f + ((float)random(25, 75) / 1000.0f);
+    embers[i].vx = ((float)random(-20, 20) / 1000.0f);
+    embers[i].life = (float)random(20, 100) / 100.0f;
+  }
 
-  int16_t prevAx = 0, prevAy = 0, prevAz = 16384;
+  // Tông màu ngọn lửa lò sưởi ấm cúng:
+  const uint32_t cEmberBase = strip.Color(160, 18, 5);    // Đỏ than hồng rực rỡ đáy lò
+  const uint32_t cFireWarm  = strip.Color(255, 85, 12);   // Cam lửa ấm nồng
+  const uint32_t cFlameCore = strip.Color(255, 205, 55);  // Vàng sáng tâm ngọn lửa
+  const uint32_t cRoseGlow  = strip.Color(210, 30, 60);   // Hồng ngọc tỏa nhiệt lãng mạn
+  const uint32_t cDarkHearth= strip.Color(18, 2, 4);      // Không gian đêm ấm áp quanh lò
+
+  float tiltBias = 0.0f;
 
   while (millis() - start < durationMs) {
-    int16_t ax = 0, ay = 0, az = 16384;
-    float jerk = 0.0f;
+    float t = (millis() - start) / 1000.0f;
 
+    // Đọc góc nghiêng nhẹ từ MPU để ngọn lửa lượn theo tay khi cầm đèn
+    int16_t ax, ay, az;
     if (readMpuAccel(ax, ay, az)) {
-      jerk = (abs(ax - prevAx) + abs(ay - prevAy) + abs(az - prevAz)) / 16384.0f;
-      prevAx = ax;
-      prevAy = ay;
-      prevAz = az;
+      tiltBias += ((ax / 16384.0f) * 1.5f - tiltBias) * 0.1f;
     }
 
-    float tiltAngle = atan2((float)ay, (float)ax);
-    float tiltMag = constrain(sqrt((float)ax * ax + (float)ay * ay) / 16384.0f, 0.0f, 1.2f);
-    unsigned long nowMs = millis();
+    // 1. Cập nhật các hạt tàn than hồng lách tách
+    for (int i = 0; i < NUM_EMBERS; i++) {
+      embers[i].y -= embers[i].vy;
+      embers[i].x += embers[i].vx + tiltBias * 0.03f;
+      embers[i].life -= 0.015f;
 
-    for (int x = 0; x < MATRIX_WIDTH; x++) {
-      int left = (x - 1 + MATRIX_WIDTH) % MATRIX_WIDTH;
-      int right = (x + 1) % MATRIX_WIDTH;
-
-      float waveTension = 0.22f * (surfaceY[left] + surfaceY[right] - 2.0f * surfaceY[x]);
-      float gravityRestore = 0.035f * (4.0f - surfaceY[x]);
-
-      float colAngle = x * (2.0f * PI / MATRIX_WIDTH);
-      float tiltForce = -sinsf(colAngle - tiltAngle) * tiltMag * 1.6f;
-
-      // Gợn sóng vi mô xung quanh kể cả khi đèn đứng yên (ambient ripple)
-      float ambientRipple = 0.012f * sinsf(nowMs * 0.0035f + x * 0.65f)
-                          + 0.007f * cossf(nowMs * 0.0062f - x * 1.10f);
-
-      velocity[x] += waveTension + gravityRestore + tiltForce + ambientRipple;
-
-      if (jerk > 0.25f) {
-        float splashImpulse = min(jerk * 0.9f, 2.2f);
-        velocity[x] += -sinsf(colAngle - tiltAngle) * splashImpulse + ((float)random(-40, 40) / 100.0f);
-      }
-
-      velocity[x] *= 0.93f;
-      velocity[x] = constrain(velocity[x], -2.0f, 2.0f);
-    }
-
-    for (int x = 0; x < MATRIX_WIDTH; x++) {
-      surfaceY[x] += velocity[x];
-      surfaceY[x] = constrain(surfaceY[x], 0.6f, 6.8f);
-      if ((surfaceY[x] <= 0.65f && velocity[x] < 0) || (surfaceY[x] >= 6.75f && velocity[x] > 0)) {
-        velocity[x] = -velocity[x] * 0.25f;
+      if (embers[i].y < -0.5f || embers[i].life <= 0.0f) {
+        embers[i].x = (float)random(0, MATRIX_WIDTH);
+        embers[i].y = (float)random(5, 8);
+        embers[i].vy = 0.06f + ((float)random(25, 80) / 1000.0f);
+        embers[i].vx = ((float)random(-25, 25) / 1000.0f);
+        embers[i].life = 1.0f;
       }
     }
 
-    if (jerk > 0.45f) {
-      for (int d = 0; d < MAX_DROPLETS; d++) {
-        if (!droplets[d].active && random(0, 10) < 4) {
-          int splashCol = random(0, MATRIX_WIDTH);
-          droplets[d].active = true;
-          droplets[d].x = splashCol;
-          droplets[d].y = surfaceY[splashCol] - 0.5f;
-          droplets[d].vy = -((float)random(30, 80) / 100.0f);
-          break;
-        }
-      }
-    }
-
-    strip.clear();
-
+    // 2. Tính toán ma trận ngọn lửa 32x8
     for (int x = 0; x < MATRIX_WIDTH; x++) {
-      int waterTop = (int)round(surfaceY[x]);
-      if (waterTop < 0) waterTop = 0;
-      if (waterTop >= MATRIX_HEIGHT) waterTop = MATRIX_HEIGHT - 1;
+      // Sóng ngọn lửa hữu cơ đa tầng khép kín 360 độ
+      float nx = (float)x / 4.0f;
+      float fireNoise = noise3(nx + tiltBias * 0.2f, t * 1.6f, 0.5f, 8);
+      float flameTop = 2.0f + 2.8f * fireNoise + 0.6f * sinsf(t * 3.5f + x * 0.8f);
 
-      int left = (x - 1 + MATRIX_WIDTH) % MATRIX_WIDTH;
-      int right = (x + 1) % MATRIX_WIDTH;
-      float slope = surfaceY[right] - surfaceY[left];
-      float specular = sin01(slope * 1.8f + (float)(nowMs & 0xFFFF) * 0.004f);
+      for (int y = 0; y < MATRIX_HEIGHT; y++) {
+        // Càng gần đáy (y=7), ngọn lửa càng đặc và nóng; càng lên đỉnh (y=0), lửa thon dần
+        float flameDist = (float)y - flameTop;
+        float heat = constrain(flameDist / 3.8f, 0.0f, 1.0f);
 
-      for (int y = MATRIX_HEIGHT - 1; y >= waterTop; y--) {
-        uint32_t waterColor;
-        float depth = (float)(y - waterTop) / (float)(MATRIX_HEIGHT - waterTop + 0.01f);
-        depth = constrain(depth, 0.0f, 1.0f);
-
-        if (y == waterTop) {
-          if (fabsf(velocity[x]) > 0.15f || jerk > 0.3f) {
-            waterColor = strip.Color(240, 255, 255); // Bọt sóng trắng xóa
-          } else {
-            // Ánh phản chiếu lấp lánh trên mặt nước (reflective specular surface highlight)
-            waterColor = lerpColor(strip.Color(90, 225, 255), strip.Color(225, 250, 255), specular * 0.75f);
-          }
-        } else if (y == waterTop + 1) {
-          // Gần mặt nước: sắc xanh ngọc lam chuyển tiếp
-          waterColor = lerpColor(strip.Color(10, 185, 255), strip.Color(0, 140, 240), depth);
+        uint32_t col;
+        if (heat > 0.70f) {
+          // Lõi lửa nóng rực: cam sáng sang vàng mật ong
+          float k = (heat - 0.70f) / 0.30f;
+          col = lerpColor(cFireWarm, cFlameCore, k);
+        } else if (heat > 0.25f) {
+          // Thân ngọn lửa: đỏ than hồng sang cam ấm
+          float k = (heat - 0.25f) / 0.45f;
+          col = lerpColor(cRoseGlow, cFireWarm, k);
         } else {
-          // Tầng nước sâu: gradient xanh biển thẫm lắng đọng
-          waterColor = lerpColor(strip.Color(0, 115, 230), strip.Color(0, 30, 160), depth);
+          // Ngọn lửa tàn và không gian ấm xung quanh
+          float k = heat / 0.25f;
+          col = lerpColor(cDarkHearth, cRoseGlow, k);
         }
 
-        setPixelXY(x, y, waterColor);
-      }
-    }
-
-    for (int d = 0; d < MAX_DROPLETS; d++) {
-      if (droplets[d].active) {
-        droplets[d].y += droplets[d].vy;
-        droplets[d].vy += 0.08f;
-
-        int dx = (int)round(droplets[d].x);
-        int dy = (int)round(droplets[d].y);
-
-        if (dx >= 0 && dx < MATRIX_WIDTH) {
-          if (dy >= 0 && dy < MATRIX_HEIGHT && dy < (int)surfaceY[dx]) {
-            setPixelXY(dx, dy, strip.Color(240, 255, 255));
-          } else if (dy >= (int)surfaceY[dx]) {
-            droplets[d].active = false;
+        // 3. Hòa trộn các tia tàn than hồng lách tách bay lên
+        for (int i = 0; i < NUM_EMBERS; i++) {
+          float edx = fabsf((float)x - embers[i].x);
+          if (edx > MATRIX_WIDTH * 0.5f) edx = MATRIX_WIDTH - edx;
+          float edy = fabsf((float)y - embers[i].y);
+          if (edx < 1.0f && edy < 1.0f) {
+            float sparkBri = (1.0f - edx) * (1.0f - edy) * embers[i].life;
+            col = lerpColor(col, strip.Color(255, 230, 160), constrain(sparkBri, 0.0f, 0.95f));
           }
-        } else {
-          droplets[d].active = false;
         }
+
+        setPixelXY(x, y, strip.gamma32(col));
       }
     }
 
-    strip.show();
+    showDisplay();
     if (delayWithTouch(28)) return;
   }
 }
@@ -563,64 +714,81 @@ void triggerNotificationFlash(uint8_t r, uint8_t g, uint8_t b, uint8_t count, ui
   uint32_t col = strip.Color(r, g, b);
   for (uint8_t i = 0; i < count; i++) {
     for (int p = 0; p < NUM_LEDS; p++) strip.setPixelColor(p, col);
-    strip.show();
+    showDisplay();
     delay(delayMs);
     strip.clear();
-    strip.show();
+    showDisplay();
     delay(delayMs);
   }
 }
 
 // ============================================================================
-// ĐỒNG HỒ POMODORO VẬT LÝ (25 PHÚT TẬP TRUNG, DẢI SÁNG HẠ DẦN TỪ ĐỈNH XUỐNG ĐÁY)
+// CHẾ ĐỘ ĐÈN NẰM NGANG (ÁNH SÁNG VÀNG THÂN THIỆN CHO MẮT, DỊU DÀNG VỀ ĐÊM)
+// Khi xoay ngang hoặc đặt nằm đèn xuống bàn/đầu giường: đèn tự động chuyển sang
+// ánh sáng vàng mật ong ấm áp 2200K, không phát ánh sáng xanh, chống mỏi mắt.
+// Dựng đứng đèn trở lại sẽ tự động khôi phục chế độ lãng mạn ban đầu.
 // ============================================================================
-void effectPomodoro(uint32_t workDurationMs) {
-  bool startedByTilt = checkPomodoroOrientation();
-  dbgLog(TAG_FX, "BẮT ĐẦU POMODORO 25 PHÚT (%s)!", startedByTilt ? "Lật hộp vật lý" : "Điều khiển từ App/CLI");
+void effectHorizontalWarmLight(uint32_t maxDurationMs) {
+  dbgLog(TAG_FX, "KÍCH HOẠT ĐÈN NẰM NGANG: Ánh sáng vàng ấm thân thiện cho mắt!");
   unsigned long start = millis();
-  const uint32_t cWork = strip.Color(255, 120, 20); // Cam ấm tập trung
-  const uint32_t cTop  = strip.Color(255, 220, 100);
 
-  while (millis() - start < workDurationMs) {
-    // Chỉ tự hủy khi dựng đứng hộp nếu ban đầu Pomodoro được kích hoạt bằng cử chỉ lật hộp
-    if (startedByTilt && !checkPomodoroOrientation()) {
-      dbgLog(TAG_FX, "Hủy Pomodoro: Hộp đã được dựng đứng lại!");
+  // Tông màu vàng ấm dịu mắt 2200K - 2400K (chuẩn ánh sáng hoàng hôn ấm áp)
+  const uint32_t cWarmGold     = strip.Color(255, 160, 40); // Vàng hổ phách mật ong dịu êm
+  const uint32_t cSoftGlow     = strip.Color(255, 195, 75); // Vầng sáng ấm tỏa nhẹ
+  const uint32_t cCozyAmber    = strip.Color(210, 115, 20); // Đỏ cam hoàng hôn trầm ấm
+
+  fadeTransition(160);
+
+  float smoothRollAngle = 0.0f;
+
+  while ((maxDurationMs == 0) ? true : (millis() - start < maxDurationMs)) {
+    // 1. Nếu dựng đứng đèn trở lại -> Tự động thoát và quay về chế độ trước
+    if (!checkHorizontalOrientation()) {
+      dbgLog(TAG_FX, "Đèn đã được dựng đứng lại -> Tự động khôi phục chế độ bình thường!");
+      fadeTransition(180);
       return;
     }
 
-    float progress = (float)(millis() - start) / (float)workDurationMs;
-    int remainingRows = (int)round((1.0f - progress) * (float)MATRIX_HEIGHT);
+    float t = (millis() - start) / 1000.0f;
+    // Nhịp thở sinh học vô cùng êm dịu (~4.5s/chu kỳ, biên độ nhẹ ±8% giữ độ sáng ổn định cho mắt)
+    float gentleBreath = 0.92f + 0.08f * sin01(t * 1.4f);
 
-    strip.clear();
+    // Đọc góc xoay quanh thân đèn từ MPU khi đang nằm ngang
+    int16_t ax, ay, az;
+    if (readMpuAccel(ax, ay, az)) {
+      float gx = (float)ax / 16384.0f;
+      float gy = (float)ay / 16384.0f;
+      float rollTarget = atan2f(gy, gx);
+      float dAngle = rollTarget - smoothRollAngle;
+      while (dAngle > PI) dAngle -= 2.0f * PI;
+      while (dAngle < -PI) dAngle += 2.0f * PI;
+      smoothRollAngle += dAngle * 0.12f;
+    }
+
     for (int x = 0; x < MATRIX_WIDTH; x++) {
-      for (int y = MATRIX_HEIGHT - 1; y >= MATRIX_HEIGHT - remainingRows; y--) {
-        if (y == MATRIX_HEIGHT - remainingRows) {
-          setPixelXY(x, y, cTop);
-        } else {
-          setPixelXY(x, y, cWork);
-        }
+      float theta = (x * 2.0f * PI) / MATRIX_WIDTH;
+      // Góc tương đối so với mặt hướng lên trên khi nằm ngang
+      float relAngle = theta - smoothRollAngle;
+      float surfaceFactor = 0.85f + 0.15f * cos01(relAngle);
+
+      for (int y = 0; y < MATRIX_HEIGHT; y++) {
+        // Chuyển sắc dọc nhẹ nhàng từ chân đến ngọn trụ
+        float vGrad = (float)y / (float)(MATRIX_HEIGHT - 1);
+        uint32_t baseCol = lerpColor(cCozyAmber, cWarmGold, smooth01(vGrad * 0.8f + 0.2f));
+
+        // Hòa sắc điểm nhấn ấm áp
+        uint32_t finalCol = lerpColor(baseCol, cSoftGlow, surfaceFactor * 0.25f);
+
+        // Áp dụng nhịp thở êm dịu và gamma chống chói
+        setPixelXY(x, y, strip.gamma32(scaleColor(finalCol, gentleBreath)));
       }
     }
-    strip.show();
-    if (delayWithTouch(200)) return;
-  }
 
-  // HẾT GIỜ 25 PHÚT: Chớp đỏ nhẹ báo hiệu nghỉ 5 phút
-  dbgLog(TAG_FX, "HẾT GIỜ POMODORO: Bắt đầu 5 phút nghỉ ngơi thư giãn!");
-  unsigned long breakStart = millis();
-  const uint32_t cBreak = strip.Color(230, 40, 40);
-
-  while (millis() - breakStart < POMODORO_BREAK_MS) {
-    if (startedByTilt && !checkPomodoroOrientation()) return;
-
-    float t = (millis() - breakStart) * 0.003f;
-    float breath = 0.15f + 0.85f * sin01(t);
-
-    for (int i = 0; i < NUM_LEDS; i++) {
-      strip.setPixelColor(i, strip.gamma32(scaleColor(cBreak, breath)));
+    showDisplay();
+    if (delayWithTouch(30)) {
+      fadeTransition(160);
+      return;
     }
-    strip.show();
-    if (delayWithTouch(35)) return;
   }
 }
 
@@ -634,7 +802,7 @@ void effectEmergencyFlashlight(uint32_t durationMs) {
   for (int i = 0; i < NUM_LEDS; i++) {
     strip.setPixelColor(i, strip.Color(255, 255, 255));
   }
-  strip.show();
+  showDisplay();
 
   unsigned long start = millis();
   unsigned long stationaryStart = 0;
@@ -657,33 +825,174 @@ void effectEmergencyFlashlight(uint32_t durationMs) {
 
   // Khôi phục độ sáng hiện hành (currentBrightness đã cập nhật nếu user đổi sáng giữa chừng)
   strip.setBrightness(toHardwareBrightness(currentBrightness));
-  strip.show();
+  showDisplay();
 }
 
 // ============================================================================
-// CHẾ ĐỘ MÀU TĨNH TÙY CHỌN THEO APP (MODE 10)
 // ============================================================================
-void effectStaticColor() {
-  uint8_t r, g, b;
-  getCustomStaticColor(r, g, b);
-  uint32_t col = strip.Color(r, g, b);
-  for (int i = 0; i < NUM_LEDS; i++) {
-    strip.setPixelColor(i, col);
+// CHẾ ĐỘ MÀU TĨNH TÙY CHỌN THEO APP (MODE 10 - PHẢN ỨNG CHUYỂN ĐỘNG MPU)
+// Khi đứng yên trên bàn: hiển thị 100% màu tĩnh thuần khiết nguyên bản.
+// Khi nghiêng hoặc nhấc đèn: ánh sáng dâng quầng lụa theo góc nghiêng trọng lực
+// và tạo làn sóng gợn lung linh phản hồi theo từng cử động của bàn tay!
+// ============================================================================
+void effectStaticColor(uint32_t durationMs) {
+  unsigned long start = millis();
+  float smoothAngle = 0.0f;
+  float smoothTilt = 0.0f;
+  float motionImpulse = 0.0f;
+  float prevTotalG = 1.0f;
+
+  while (millis() - start < durationMs) {
+    uint8_t r, g, b;
+    getCustomStaticColor(r, g, b);
+    uint32_t baseCol = strip.Color(r, g, b);
+    float t = (millis() - start) / 1000.0f;
+
+    // Đọc cảm biến gia tốc MPU-6050
+    int16_t ax, ay, az;
+    if (readMpuAccel(ax, ay, az)) {
+      float gx = (float)ax / 16384.0f;
+      float gy = (float)ay / 16384.0f;
+      float gz = (float)az / 16384.0f;
+
+      // 1. Nhận diện góc nghiêng 360 độ quanh thân trụ
+      float targetAngle = atan2f(gy, gx);
+      float targetTilt = constrain(sqrtf(gx * gx + gy * gy) / 0.65f, 0.0f, 1.0f);
+
+      // Lọc thông thấp mượt mà góc và độ nghiêng (Low-pass filter)
+      smoothTilt += (targetTilt - smoothTilt) * 0.15f;
+      float dAngle = targetAngle - smoothAngle;
+      if (dAngle > PI) dAngle -= 2.0f * PI;
+      else if (dAngle < -PI) dAngle += 2.0f * PI;
+      smoothAngle += dAngle * 0.15f;
+
+      // 2. Nhận diện gia tốc chuyển động & chạm lắc (Dynamic Motion Jerk)
+      float totalG = sqrtf(gx * gx + gy * gy + gz * gz);
+      float dG = fabsf(totalG - prevTotalG);
+      prevTotalG = totalG;
+
+      if (dG > 0.045f) {
+        motionImpulse += dG * 2.5f;
+        if (motionImpulse > 1.0f) motionImpulse = 1.0f;
+      }
+    }
+    // Suy hao êm dịu động năng chuyển động
+    motionImpulse *= 0.91f;
+
+    // 3. Kết xuất ma trận 32x8 phản ứng với MPU
+    for (int x = 0; x < MATRIX_WIDTH; x++) {
+      float a = (x * 2.0f * PI) / MATRIX_WIDTH;
+      // Hướng mặt đối diện với góc nghiêng (1.0 = phía nghiêng xuống, 0.0 = phía đối diện)
+      float facing = cos01(a - smoothAngle);
+
+      // Quầng sáng lụa trôi theo góc nghiêng (Tilt Sheen): phía nghiêng sáng bừng hơn (+35%)
+      float tiltFactor = (facing * facing) * smoothTilt;
+      float tiltBriMod = (1.0f - smoothTilt * 0.20f) + tiltFactor * 0.55f;
+
+      // Sóng gợn ánh sáng khi chạm / lắc / nhấc đèn (Motion Ripple Wave)
+      float wave = 0.0f;
+      if (motionImpulse > 0.02f) {
+        wave = sinsf(a * 2.0f - t * 7.0f) * motionImpulse * 0.35f;
+      }
+
+      float finalBri = constrain(tiltBriMod + wave, 0.20f, 1.45f);
+      uint32_t col = scaleColor(baseCol, finalBri);
+
+      // Khi chuyển động rõ rệt: viền sáng ánh kim lướt qua thân đèn
+      if (motionImpulse > 0.25f) {
+        float sparkle = (motionImpulse - 0.25f) / 0.75f;
+        col = lerpColor(col, strip.Color(255, 248, 255), sparkle * 0.28f);
+      }
+
+      for (int y = 0; y < MATRIX_HEIGHT; y++) {
+        setPixelXY(x, y, strip.gamma32(col));
+      }
+    }
+
+    showDisplay();
+    if (delayWithTouch(22)) return;
   }
-  strip.show();
-  delayWithTouch(60);
 }
 
 // ============================================================================
-// MODE 11: HIỂN THỊ 4 Ô BITMAP TÙY BIẾN ĐỘC LẬP THEO 4 MẶT 1, 2, 3, 4 (CÓ ANIMATION)
+// MODE 11: 4 KHUNG HÌNH KỶ NIỆM (4-SLOT LOVE MEMORIES - PHẢN ỨNG MPU)
+// Khi nghiêng đèn: rọi sáng nổi bật bức tranh ở mặt hướng về người nhìn (+35%).
+// Khi nhấc đèn hoặc xoay: vệt hào quang pha lê quét qua 4 khung tranh lung linh.
 // ============================================================================
 void effectFourSlotsCustom(uint32_t durationMs) {
   unsigned long start = millis();
+  float smoothAngle = 0.0f;
+  float smoothTilt = 0.0f;
+  float motionImpulse = 0.0f;
+  float prevTotalG = 1.0f;
+
   while (millis() - start < durationMs) {
+    float t = (millis() - start) / 1000.0f;
     uint8_t frame = (millis() / 350) % 2;
+
+    // 1. Vẽ 4 ô hình kỷ niệm nguyên bản
     renderFourSlotsAnimated(frame);
-    strip.show();
-    if (delayWithTouch(60)) return;
+
+    // 2. Đọc cảm biến chuyển động MPU-6050
+    int16_t ax, ay, az;
+    if (readMpuAccel(ax, ay, az)) {
+      float gx = (float)ax / 16384.0f;
+      float gy = (float)ay / 16384.0f;
+      float gz = (float)az / 16384.0f;
+
+      float targetAngle = atan2f(gy, gx);
+      float targetTilt = constrain(sqrtf(gx * gx + gy * gy) / 0.65f, 0.0f, 1.0f);
+
+      smoothTilt += (targetTilt - smoothTilt) * 0.15f;
+      float dAngle = targetAngle - smoothAngle;
+      if (dAngle > PI) dAngle -= 2.0f * PI;
+      else if (dAngle < -PI) dAngle += 2.0f * PI;
+      smoothAngle += dAngle * 0.15f;
+
+      float totalG = sqrtf(gx * gx + gy * gy + gz * gz);
+      float dG = fabsf(totalG - prevTotalG);
+      prevTotalG = totalG;
+      if (dG > 0.045f) {
+        motionImpulse += dG * 2.5f;
+        if (motionImpulse > 1.0f) motionImpulse = 1.0f;
+      }
+    }
+    motionImpulse *= 0.91f;
+
+    // 3. Nếu có độ nghiêng hoặc chuyển động -> Điều biến ánh sáng tương tác MPU
+    if (smoothTilt > 0.05f || motionImpulse > 0.02f) {
+      for (int x = 0; x < MATRIX_WIDTH; x++) {
+        float a = (x * 2.0f * PI) / MATRIX_WIDTH;
+        float facing = cos01(a - smoothAngle);
+
+        // Mặt nghiêng về hướng người dùng được rọi sáng nổi bật (+35%)
+        float tiltFactor = (facing * facing) * smoothTilt;
+        float tiltMod = (1.0f - smoothTilt * 0.18f) + tiltFactor * 0.50f;
+
+        // Vệt hào quang lấp lánh (Shimmer beam) quét qua tranh khi có chuyển động
+        float sheen = 0.0f;
+        if (motionImpulse > 0.02f) {
+          sheen = sinsf(a * 2.0f - t * 6.5f) * motionImpulse * 0.35f;
+        }
+
+        float factor = constrain(tiltMod + sheen, 0.25f, 1.45f);
+
+        for (int y = 0; y < MATRIX_HEIGHT; y++) {
+          uint16_t idx = XY(x, y);
+          uint32_t c = strip.getPixelColor(idx);
+          if (c != 0) { // Chỉ điều biến các pixel có màu của bức tranh
+            uint32_t modCol = scaleColor(c, factor);
+            if (motionImpulse > 0.30f) {
+              modCol = lerpColor(modCol, strip.Color(255, 245, 255), (motionImpulse - 0.30f) * 0.25f);
+            }
+            strip.setPixelColor(idx, modCol);
+          }
+        }
+      }
+    }
+
+    showDisplay();
+    if (delayWithTouch(28)) return;
   }
 }
 
@@ -713,20 +1022,6 @@ void getDeviceTime(uint8_t &hour, uint8_t &minute, uint8_t &second) {
   hour = (currentSecOfDay / 3600) % 24;
   minute = (currentSecOfDay % 3600) / 60;
   second = currentSecOfDay % 60;
-}
-
-void effectDeskClock(uint32_t durationMs) {
-  unsigned long start = millis();
-  while (millis() - start < durationMs) {
-    uint8_t h, m, s;
-    getDeviceTime(h, m, s);
-    bool colonBlink = (millis() % 1000) < 500;
-    // Luân phiên: 8s hiện giờ, 2s hiện nhiệt độ đồng bộ từ App
-    bool showTemp = ((millis() - start) % 10000) >= 8000;
-    renderDeskClock(h, m, colonBlink, currentWeatherTemp, showTemp);
-    strip.show();
-    if (delayWithTouch(80)) return;
-  }
 }
 
 
@@ -871,7 +1166,7 @@ void effectWeatherClearSky(uint32_t durationMs) {
         setPixelXY(x, y, strip.gamma32(scaleColor(col, sky.nightBriScale)));
       }
     }
-    strip.show();
+    showDisplay();
     t += 0.035f;
     if (delayWithTouch(25)) return;
   }
@@ -913,7 +1208,7 @@ void effectWeatherCloudy(uint32_t durationMs) {
         setPixelXY(x, y, strip.gamma32(scaleColor(finalCol, sky.nightBriScale)));
       }
     }
-    strip.show();
+    showDisplay();
     t += 0.022f;
     if (delayWithTouch(25)) return;
   }
@@ -1008,7 +1303,7 @@ void effectWeatherRain(uint32_t durationMs) {
       setPixelXY(x, MATRIX_HEIGHT - 1, strip.gamma32(scaleColor(puddleCol, bri)));
     }
 
-    strip.show();
+    showDisplay();
     t += 0.035f;
     if (delayWithTouch(24)) return;
   }
@@ -1112,15 +1407,136 @@ void effectWeatherStorm(uint32_t durationMs) {
       }
     }
 
-    strip.show();
+    showDisplay();
     t += 0.04f;
     if (delayWithTouch(22)) return;
   }
 }
 
+// ============================================================================
+// MODE 12: ĐÓA HỒNG HÉ NỞ (BLOOMING ROSE OF LOVE - HOA HỒNG TÌNH YÊU NỞ RỘ)
+// ============================================================================
+void effectBloomingRose(uint32_t durationMs) {
+  unsigned long start = millis();
+  const float CYCLE_SEC = 5.6f; // Chu kỳ hoa hồng nở rồi khép ~5.6 giây
+
+  const uint32_t cRoseCore  = strip.Color(210, 8, 45);    // Đỏ nhung ruby tâm hoa
+  const uint32_t cPetalMid  = strip.Color(255, 45, 125);  // Hồng cánh sen rực rỡ
+  const uint32_t cPetalEdge = strip.Color(255, 165, 195); // Hồng phấn viền cánh
+  const uint32_t cGlowGold  = strip.Color(255, 220, 145); // Ánh sương sớm vàng kim lấp lánh
+  const uint32_t cBgDream   = strip.Color(20, 2, 14);     // Đêm huyền ảo mộng mơ
+
+  while (millis() - start < durationMs) {
+    float elapsed = (millis() - start) / 1000.0f;
+    float normCycle = fmodf(elapsed, CYCLE_SEC) / CYCLE_SEC; // 0.0 -> 1.0
+
+    // Nhịp bung nở hoa hồng: Từ nụ e ấp (0.0 -> 0.45), Nở rộ cực đại (0.45 -> 0.70), Khép lại thư thái (0.70 -> 1.0)
+    float bloom;
+    if (normCycle < 0.45f) {
+      bloom = smooth01(normCycle / 0.45f);
+    } else if (normCycle < 0.70f) {
+      bloom = 1.0f + 0.08f * sinsf((normCycle - 0.45f) * (PI / 0.25f)); // Hoa khẽ rung rinh trong gió nhẹ
+    } else {
+      bloom = 1.0f - smooth01((normCycle - 0.70f) / 0.30f);
+    }
+
+    float maxRadius = 1.4f + 3.6f * bloom; // Bán kính cánh hoa nở bung từ 1.4 lên 5.0
+
+    for (int x = 0; x < MATRIX_WIDTH; x++) {
+      int face = x / 8;
+      float faceCenterX = face * 8.0f + 3.5f;
+      float faceCenterY = 3.5f;
+      float dx = (float)x - faceCenterX;
+
+      for (int y = 0; y < MATRIX_HEIGHT; y++) {
+        float dy = (float)y - faceCenterY;
+        float dist = sqrtf(dx * dx + dy * dy);
+        float angle = atan2f(dy, dx);
+
+        // Tạo 5 cánh hoa hồng uốn lượn mềm mại (5-lobed rose petal shape)
+        float petalWave = 0.28f * cosf(5.0f * angle + elapsed * 0.4f);
+        float shapedDist = dist * (1.0f - petalWave);
+
+        float petalFactor = shapedDist / (maxRadius + 0.001f);
+
+        uint32_t col;
+        if (petalFactor <= 0.35f) {
+          // Tâm nhung ruby đỏ thắm
+          float k = petalFactor / 0.35f;
+          col = lerpColor(cRoseCore, cPetalMid, k);
+        } else if (petalFactor <= 0.85f) {
+          // Thân cánh hoa hồng rực rỡ
+          float k = (petalFactor - 0.35f) / 0.50f;
+          col = lerpColor(cPetalMid, cPetalEdge, k);
+        } else if (petalFactor <= 1.15f) {
+          // Viền cánh hoa phát sáng vàng óng ánh sương
+          float k = (petalFactor - 0.85f) / 0.30f;
+          col = lerpColor(cPetalEdge, cGlowGold, k);
+        } else {
+          // Vùng nền tỏa hào quang ấm quanh bông hoa
+          float aura = expf(-(petalFactor - 1.15f) * 1.8f) * (0.35f + 0.35f * bloom);
+          col = lerpColor(cBgDream, cPetalMid, constrain(aura, 0.0f, 0.75f));
+        }
+
+        // Điểm xuyết hạt sương lấp lánh trên cánh hoa
+        float dew = sinsf(x * 17.13f + y * 31.41f + elapsed * 2.0f);
+        if (dew > 0.88f && petalFactor < 1.0f) {
+          col = lerpColor(col, strip.Color(255, 245, 230), (dew - 0.88f) * 6.0f);
+        }
+
+        setPixelXY(x, y, strip.gamma32(col));
+      }
+    }
+
+    showDisplay();
+    if (delayWithTouch(30)) return;
+  }
+}
+
 // ----------------------------------------------------------------------------
-// 5. TRÌNH ĐIỀU PHỐI THỜI TIẾT TRỰC TIẾP (LIVE WEATHER ENGINE - MODE 15)
+// CẬP NHẬT THỜI TIẾT TỪ APP / CLI & KÍCH HOẠT ANIMATION THỜI TIẾT 360° SỐNG ĐỘNG
 // ----------------------------------------------------------------------------
+void triggerWeatherUpdate(int8_t temp, uint8_t weatherId, bool switchMode) {
+  currentWeatherTemp = temp;
+  currentWeatherId   = (weatherId >= 1 && weatherId <= 4) ? weatherId : 1;
+
+  uint8_t targetMode = 14;
+  const char* weatherDesc = "NANG DEP";
+
+  switch (currentWeatherId) {
+    case 1:
+      targetMode = 14; // Mode 14: Nắng đẹp & mặt trời xoay
+      weatherDesc = "NANG DEP";
+      break;
+    case 2:
+      targetMode = 16; // Mode 16: Mây trời đa tầng
+      weatherDesc = "NHIEU MAY";
+      break;
+    case 3:
+      targetMode = 15; // Mode 15: Mưa rơi & vũng nước
+      weatherDesc = "MUA ROI";
+      break;
+    case 4:
+      targetMode = 17; // Mode 17: Giông bão sấm chớp
+      weatherDesc = "GIONG BAO";
+      break;
+  }
+
+  if (switchMode) {
+    if (currentMode != targetMode) {
+      fadeTransition(240);
+    }
+    currentMode = targetMode;
+    markSettingsChanged();
+    dbgLog(TAG_FX, "Đồng bộ thời tiết: %d°C | ID: %d (%s) -> Chuyển trực tiếp sang Animation Mode %d",
+           temp, currentWeatherId, weatherDesc, targetMode);
+  } else {
+    dbgLog(TAG_FX, "Cập nhật thời tiết ngầm: %d°C | ID: %d (%s) (Giữ nguyên Mode %d)",
+           temp, currentWeatherId, weatherDesc, currentMode);
+  }
+}
+
+// Chạy hoạt hình thời tiết sống động 360° theo trạng thái hiện tại (dùng cho chu kỳ tuần hoàn Mode 0)
 void effectWeatherLive(uint32_t durationMs) {
   switch (currentWeatherId) {
     case 1:  effectWeatherClearSky(durationMs); break;
@@ -1131,80 +1547,32 @@ void effectWeatherLive(uint32_t durationMs) {
   }
 }
 
-// ----------------------------------------------------------------------------
-// 6. CẬP NHẬT THỜI TIẾT TỪ APP / CLI & CHUYỂN VÀO CHẾ ĐỘ THỜI TIẾT SỐNG ĐỘNG
-// ----------------------------------------------------------------------------
-void triggerWeatherUpdate(int8_t temp, uint8_t weatherId, bool showBannerAndSwitchMode) {
-  currentWeatherTemp = temp;
-  currentWeatherId   = (weatherId >= 1 && weatherId <= 4) ? weatherId : 1;
-
-  if (!showBannerAndSwitchMode) {
-    dbgLog(TAG_FX, "Cập nhật dữ liệu thời tiết ngầm: %d°C (ID: %d)", temp, currentWeatherId);
-    return;
-  }
-
-  SkyTimePalette sky = computeSkyPalette();
-  bool isNight = (sky.dayFactor < 0.35f);
-
-  const char* wLabel = "NANG";
-  uint32_t wCol = sky.orbColor;
-
-  switch (currentWeatherId) {
-    case 1: // Quang đãng: Ban ngày báo "NANG", Ban đêm báo "QUANG"
-      wLabel = isNight ? "QUANG" : "NANG";
-      wCol   = sky.orbColor;
-      break;
-    case 2: // Nhiều mây
-      wLabel = "MAY";
-      wCol   = sky.cloudEdge;
-      break;
-    case 3: // Mưa
-      wLabel = "MUA";
-      wCol   = sky.rainColor;
-      break;
-    case 4: // Giông bão / Sấm chớp
-      wLabel = "BAO";
-      wCol   = strip.Color(210, 120, 255);
-      break;
-  }
-
-  char banner[24];
-  snprintf(banner, sizeof(banner), "%dC %s", (int)temp, wLabel);
-  dbgLog(TAG_FX, "Đồng bộ thời tiết (%s): %s -> Chạy hiệu ứng Thời tiết 360° (Mode 15)",
-         isNight ? "BAN ĐÊM" : "BAN NGÀY", banner);
-
-  currentMode = 15; // Đặt Mode 15 trước khi cuộn chữ để nếu user bấm đổi mode giữa chừng sẽ không bị ghi đè
-  markSettingsChanged();
-
-  effectCylinderScrollText(banner, wCol, 55);
-}
-
 // ============================================================================
-// MODE 13: NHỊP ĐẬP TRÁI TIM LÃNG MẠN (HEARTBEAT PULSE - TÌNH YÊU NỒNG NÀN)
+// MODE 1: NHỊP ĐẬP TRÁI TIM LÃNG MẠN (HEARTBEAT PULSE - TÌNH YÊU NỒNG NÀN)
 // ============================================================================
 void effectHeartbeatPulse(uint32_t durationMs) {
   unsigned long start = millis();
 
-  // Bitmap trái tim 8x8 chuẩn pixel art căn giữa trên mỗi mặt 8x8
+  // Bitmap trái tim 8x8 căn chuẩn tâm (hàng 0..6 đầy đặn, hàng 7 nhọn đáy)
   static const uint8_t HEART_MAP[8] = {
-    0b00000000,
     0b01100110,
     0b11111111,
     0b11111111,
     0b11111111,
     0b01111110,
     0b00111100,
-    0b00011000
+    0b00011000,
+    0b00000000
   };
 
   // Vùng tâm trái tim sáng điểm nhấn (inner highlight)
   static const uint8_t HEART_CORE[8] = {
     0b00000000,
-    0b00000000,
     0b01000010,
     0b01100110,
     0b00111100,
     0b00011000,
+    0b00000000,
     0b00000000,
     0b00000000
   };
@@ -1216,7 +1584,7 @@ void effectHeartbeatPulse(uint32_t durationMs) {
     float vy;
     float phase;
   };
-  const int NUM_EMBERS = 8;
+  const int NUM_EMBERS = 10;
   FloatingEmber embers[NUM_EMBERS];
   for (int i = 0; i < NUM_EMBERS; i++) {
     embers[i].x = (float)random(0, MATRIX_WIDTH);
@@ -1225,12 +1593,12 @@ void effectHeartbeatPulse(uint32_t durationMs) {
     embers[i].phase = ((float)random(0, 628) / 100.0f);
   }
 
-  const uint32_t cDeepRose   = strip.Color(180, 8, 45);    // Đỏ hoa hồng nhung
-  const uint32_t cWarmPink   = strip.Color(255, 65, 130);  // Hồng ấm rực rỡ
-  const uint32_t cSoftWhite  = strip.Color(255, 235, 245); // Ánh trắng ấm tại đỉnh nhịp đập
-  const uint32_t cGlowPink   = strip.Color(210, 25, 95);   // Ánh hào quang hồng lan tỏa
-  const uint32_t cBgBurgundy = strip.Color(20, 2, 8);      // Nền đỏ rượu vang sâu
-  const uint32_t cBgWarmRose = strip.Color(38, 4, 18);     // Nền hồng cánh sen trầm ấm
+  const uint32_t cDeepRose   = strip.Color(220, 12, 50);   // Đỏ hoa hồng nhung
+  const uint32_t cWarmPink   = strip.Color(255, 75, 140);  // Hồng ấm rực rỡ
+  const uint32_t cSoftWhite  = strip.Color(255, 240, 248); // Ánh trắng ngọc tại đỉnh nhịp đập
+  const uint32_t cGlowPink   = strip.Color(225, 30, 100);  // Ánh hào quang hồng lan tỏa
+  const uint32_t cBgBurgundy = strip.Color(35, 4, 14);     // Nền đỏ rượu vang sâu
+  const uint32_t cBgWarmRose = strip.Color(55, 6, 25);     // Nền hồng cánh sen trầm ấm
 
   const uint32_t CYCLE_MS = 1150; // Chu kỳ nhịp đập ~52 bpm (êm đềm, tình cảm)
 
@@ -1322,92 +1690,61 @@ void effectHeartbeatPulse(uint32_t durationMs) {
       }
     }
 
-    strip.show();
+    showDisplay();
     if (delayWithTouch(28)) return;
   }
 }
 
 // ============================================================================
-// MODE 14: SÓNG TÌNH YÊU LAN TỎA (LOVE RIPPLE - GỢN SÓNG LÃNG MẠN MƠ MỘNG)
+// MODE 2: PHA LÊ THẠCH ANH TÍM (AMETHYST CRYSTAL DREAM)
+// Khối trụ pha lê thạch anh hoàng gia lấp lánh phản chiếu đa giác khúc xạ
+// ánh tím quý phái, những tia sáng ngọc bích dâng trào và tia kim cương lấp lánh.
 // ============================================================================
-static inline uint32_t loveRipplePalette(float v) {
-  v = fmodf(v, 1.0f);
-  if (v < 0.0f) v += 1.0f;
-  if (v < 0.25f) {
-    return lerpColor(strip.Color(255, 75, 145), strip.Color(225, 25, 165), v * 4.0f); // Rose pink -> Magenta
-  } else if (v < 0.50f) {
-    return lerpColor(strip.Color(225, 25, 165), strip.Color(170, 90, 245), (v - 0.25f) * 4.0f); // Magenta -> Lavender
-  } else if (v < 0.75f) {
-    return lerpColor(strip.Color(170, 90, 245), strip.Color(120, 55, 225), (v - 0.50f) * 4.0f); // Lavender -> Soft violet
-  } else {
-    return lerpColor(strip.Color(120, 55, 225), strip.Color(255, 75, 145), (v - 0.75f) * 4.0f); // Soft violet -> Rose pink
-  }
-}
-
-void effectLoveRipple(uint32_t durationMs) {
+void effectAmethystCrystal(uint32_t durationMs) {
   unsigned long start = millis();
-  const int NUM_SOURCES = 4;
+
+  // Bảng màu đá quý thạch anh hoàng gia
+  const uint32_t cDeepAmethyst = strip.Color(38, 5, 75);    // Tím hoàng gia huyền bí
+  const uint32_t cVibrantViolet= strip.Color(135, 28, 205); // Tím thạch anh rực rỡ
+  const uint32_t cRoseQuartz   = strip.Color(210, 85, 240); // Hồng tím thạch anh pha lê
+  const uint32_t cDiamondSpark = strip.Color(255, 245, 255); // Tia sáng kim cương tinh khiết
 
   while (millis() - start < durationMs) {
     float t = (millis() - start) / 1000.0f;
 
-    // Nhịp thở độ sáng tổng thể dịu êm
-    float breath = 0.65f + 0.35f * sin01(t * 0.9f);
+    // Nhịp thở pha lê sâu lắng, vương giả
+    float crystalBreath = 0.80f + 0.20f * sin01(t * 0.75f);
 
-    // 4 tâm sóng tình yêu trôi dạt hữu cơ quanh 4 mặt của hình trụ
-    float srcX[NUM_SOURCES];
-    float srcY[NUM_SOURCES];
-    for (int i = 0; i < NUM_SOURCES; i++) {
-      float baseCenter = i * 8.0f + 3.5f;
-      // Trôi dạt chậm theo quỹ đạo Lissajous mềm mại
-      srcX[i] = baseCenter + 1.8f * sinsf(t * 0.55f + i * 1.57f);
-      srcY[i] = 3.5f + 1.6f * cossf(t * 0.70f + i * 2.09f);
-    }
+    for (int y = 0; y < MATRIX_HEIGHT; y++) {
+      for (int x = 0; x < MATRIX_WIDTH; x++) {
+        float theta = (x * 2.0f * PI) / MATRIX_WIDTH;
 
-    for (int x = 0; x < MATRIX_WIDTH; x++) {
-      for (int y = 0; y < MATRIX_HEIGHT; y++) {
-        float waveSum = 0.0f;
-        float attenSum = 0.0f;
+        // 1. Khúc xạ bề mặt góc đa diện pha lê (6 mặt lăng kính khúc xạ ánh sáng 360°)
+        float facet1 = sin01(theta * 6.0f + (float)y * 0.65f + t * 0.55f);
+        float facet2 = sin01(theta * 3.0f - (float)y * 0.95f - t * 0.40f);
+        float internalLight = 0.55f * facet1 + 0.45f * facet2;
+        float caustic = powf(internalLight, 2.0f);
 
-        // Tính giao thoa sóng từ các tâm nguồn (liền mạch 360 độ quanh trụ)
-        for (int i = 0; i < NUM_SOURCES; i++) {
-          float dx = fabsf((float)x - srcX[i]);
-          if (dx > MATRIX_WIDTH * 0.5f) dx = MATRIX_WIDTH - dx; // Quấn vòng trụ
-          float dy = (float)y - srcY[i];
-          float dist = sqrtf(dx * dx + dy * dy);
+        // 2. Tia sáng năng lượng thạch anh dâng trào từ đáy lên đỉnh
+        float upWave = sin01((float)y * 0.85f - t * 1.3f + sinsf(theta * 2.0f + t * 0.6f) * 1.2f);
+        float crystalEnergy = caustic * 0.65f + upWave * 0.35f;
 
-          // Vòng sóng đồng tâm lan tỏa ra ngoài
-          float w = sinsf(dist * 1.6f - t * 2.8f);
-          float atten = 1.0f / (1.0f + dist * 0.32f);
+        // Nội suy màu sắc từ thạch anh tím sâu thẳm đến tím sáng và hồng thạch anh
+        uint32_t col = palette3(crystalEnergy, cDeepAmethyst, cVibrantViolet, cRoseQuartz);
 
-          waveSum += w * atten;
-          attenSum += atten;
+        // 3. Vết lóe sáng kim cương (Prismatic diamond glints) trên các giác cắt
+        float glintNoise = noise3((float)x * 0.25f, (float)y * 0.5f, t * 1.6f, 8);
+        if (glintNoise > 0.80f) {
+          float glintStrength = (glintNoise - 0.80f) / 0.20f;
+          col = lerpColor(col, cDiamondSpark, powf(glintStrength, 1.8f) * 0.90f);
         }
 
-        float interference = waveSum / (attenSum + 0.001f); // Chuẩn hóa -1.0 .. 1.0
-        float normVal = 0.5f + 0.5f * interference;
-
-        // Chu kỳ màu sắc luân chuyển chậm
-        float colorPhase = normVal * 0.45f + t * 0.05f;
-        uint32_t baseCol = loveRipplePalette(colorPhase);
-
-        // Độ sáng với độ tương phản gợn sóng đẹp mắt
-        float bri = 0.20f + 0.80f * powf(normVal, 1.4f);
-        uint32_t col = scaleColor(baseCol, bri * breath);
-
-        // Lớp shimmer / hạt sao pastel lấp lánh như bụi tiên
-        float shimmerNoise = sinsf(x * 12.9898f + y * 78.233f + t * 4.5f);
-        if (shimmerNoise > 0.82f) {
-          float shimmerIntensity = (shimmerNoise - 0.82f) / 0.18f;
-          col = lerpColor(col, strip.Color(255, 235, 250), shimmerIntensity * 0.70f);
-        }
-
-        setPixelXY(x, y, strip.gamma32(col));
+        setPixelXY(x, y, strip.gamma32(scaleColor(col, crystalBreath)));
       }
     }
 
-    strip.show();
-    if (delayWithTouch(26)) return;
+    showDisplay();
+    if (delayWithTouch(25)) return;
   }
 }
 
@@ -1431,7 +1768,7 @@ void effectChargingAmber(uint32_t durationMs) {
         setPixelXY(x, y, strip.gamma32(scaleColor(cAmber, breath)));
       }
     }
-    strip.show();
+    showDisplay();
     step++;
     if (delayWithTouch(40)) break;
   }
@@ -1439,15 +1776,15 @@ void effectChargingAmber(uint32_t durationMs) {
 
 void effectChargeFullGreen(uint32_t durationMs) {
   unsigned long start = millis();
-  const uint32_t cGreen = strip.Color(20, 200, 40);
+  const uint32_t cWarmRose = strip.Color(255, 95, 120); // Hồng cánh sen ấm dịu lãng mạn (không dùng xanh lá)
 
   while ((durationMs == 0) ? true : (millis() - start < durationMs)) {
     if (userOverrideCharging || updateChargeState() != FULL) break;
 
     for (int i = 0; i < NUM_LEDS; i++) {
-      strip.setPixelColor(i, cGreen);
+      strip.setPixelColor(i, cWarmRose);
     }
-    strip.show();
+    showDisplay();
     if (delayWithTouch(60)) break;
   }
 }

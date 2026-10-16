@@ -1,14 +1,40 @@
 package com.esp32.ledmatrix360.model
 
+import android.bluetooth.BluetoothDevice
 import androidx.compose.ui.graphics.Color
+
+/**
+ * Trạng thái chi tiết của kết nối BLE
+ */
+enum class BleConnectionState(val displayName: String) {
+    DISCONNECTED("Chưa kết nối"),
+    SCANNING("Đang quét tìm đèn..."),
+    CONNECTING("Đang tạo kết nối GATT..."),
+    NEGOTIATING_MTU("Đang đàm phán MTU..."),
+    DISCOVERING_SERVICES("Đang tìm dịch vụ..."),
+    ENABLING_NOTIFICATIONS("Đang bật nhận phản hồi..."),
+    CONNECTED("Đã kết nối")
+}
+
+/**
+ * Thiết bị đèn tìm thấy trong phiên quét
+ */
+data class DiscoveredLampDevice(
+    val device: BluetoothDevice,
+    val name: String,
+    val address: String,
+    val rssi: Int,
+    val lastSeen: Long = System.currentTimeMillis()
+)
 
 /**
  * Dữ liệu trạng thái phản hồi thời gian thực từ ESP32 qua BLE TX (Notify)
  */
 data class TelemetryState(
     val mode: Int = 1,
-    val modeName: String = "Lava Noise",
+    val modeName: String = "Nhịp Đập Trái Tim",
     val brightness: Int = 68,
+    val speed: Int = 50,
     val powerState: Int = 0, // 0: Dùng Pin, 1: Đang sạc, 2: Sạc đầy 100%
     val vbus: Int = 0,
     val statMv: Int = 0,
@@ -193,28 +219,31 @@ data class PixelPreset(
 
 object LampConstants {
     const val DEVICE_NAME = "LED-MATRIX-360"
+    const val SHORT_NAME  = "LED-360"
     const val NUS_SERVICE_UUID = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
     const val NUS_RX_UUID      = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E" // App Ghi xuống ESP32
     const val NUS_TX_UUID      = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E" // ESP32 Bắn Notify lên App
     const val CCCD_UUID        = "00002902-0000-1000-8000-00805F9B34FB"
 
     val MODES = listOf(
-        LampMode(0, "Tự động đổi", "🔄", "Auto-Cycle 5 mode đỉnh cao"),
-        LampMode(1, "Lava Noise", "🌋", "Dung nham 3D mượt mà (Mặc định)"),
-        LampMode(2, "Edge Light", "✨", "Đèn viền 4 cạnh góc tối giản"),
-        LampMode(3, "Face Wave", "🌊", "Sóng nhịp 4 mặt chuyển sắc"),
-        LampMode(4, "Tilt Glow", "🎯", "Bám góc nghiêng & lắc bừng sáng"),
-        LampMode(5, "Water Physics", "💧", "Showpiece mặt nước & giọt bắn"),
-        LampMode(6, "Night Breathing", "🌙", "Nhịp thở ban đêm êm dịu"),
-        LampMode(7, "Aurora Flow", "🌌", "Cực quang uốn lượn tím - cyan"),
-        LampMode(8, "Dò dây LED", "🔍", "Calibration test 0 -> 255"),
-        LampMode(9, "Tắt đèn", "💤", "Standby ngủ đông"),
-        LampMode(10, "Màu tĩnh", "🎨", "Màu tùy chọn từ bảng màu"),
-        LampMode(11, "4 Ô Bitmap", "🖼️", "Tùy biến 4 ô riêng biệt theo 4 mặt"),
-        LampMode(12, "Đồng hồ 360°", "⏰", "Đồng hồ số để bàn & thời gian thực"),
-        LampMode(13, "Nhịp đập trái tim", "💓", "Hiệu ứng nhịp tim đập lãng mạn tình yêu"),
-        LampMode(14, "Sóng tình yêu", "💖", "Sóng lan tỏa mơ mộng"),
-        LampMode(15, "Thời tiết 360°", "🌦️", "Cảnh thời tiết sống động ngày/đêm")
+        LampMode(0, "Tự động đổi", "🔄", "Tuần hoàn các cảnh lãng mạn (Romantic Cycle)"),
+        LampMode(1, "Nhịp Đập Trái Tim", "💓", "Nhịp đập trái tim lãng mạn (Mặc định)"),
+        LampMode(2, "Thạch Anh Tím", "💎", "Pha Lê Thạch Anh Tím 360° (Amethyst Crystal)"),
+        LampMode(3, "Ánh Nến Hẹn Hò", "🕯️", "Ngọn lửa nến ấm cúng hai người (Candlelight)"),
+        LampMode(4, "Cử Chỉ Yêu Thương", "🎯", "Ánh sáng âu yếm theo góc nghiêng MPU (Love Tilt)"),
+        LampMode(5, "Lò Sưởi Ấm Cúng", "🔥", "Lửa ấm đêm đông 360° (Cozy Fireplace)"),
+        LampMode(6, "Hoa Oải Hương", "🪻", "Biển hoa oải hương tím hoàng hôn (Lavender Breeze)"),
+        LampMode(7, "Cực Quang Tình Nhân", "🌌", "Cực quang tím & hồng mộng mơ (Lover's Aurora)"),
+        LampMode(8, "Ngàn Sao Hẹn Ước", "⭐", "Bầu trời đêm & sao băng ước nguyện (Starry Night)"),
+        LampMode(9, "Tắt đèn", "💤", "Chế độ Standby / Tắt"),
+        LampMode(10, "Màu Tĩnh Lãng Mạn", "🎨", "Màu tĩnh tùy chọn từ App (Phản ứng MPU)"),
+        LampMode(11, "Khung Hình Kỷ Niệm", "🖼️", "4 Khung hình kỷ niệm 8x8 (4-Slot Love Memories)"),
+        LampMode(12, "Đóa Hồng Hé Nở", "🌹", "Đóa hoa hồng tình yêu nở rộ (Blooming Rose)"),
+        LampMode(13, "Chữ Chạy 360°", "💬", "Dải ruy-băng tin nhắn chạy quanh thân đèn (Marquee)"),
+        LampMode(14, "Nắng Đẹp 360°", "☀️", "Mặt trời & tia nắng xoay tròn theo giờ (Clear Sky)"),
+        LampMode(15, "Mưa Rơi 360°", "🌧️", "Hạt mưa rơi & sóng nước bắn tung tóe (Rain & Puddles)"),
+        LampMode(16, "Mây Trời 360°", "☁️", "Mây trôi đa tầng bồng bềnh 360° (Volumetric Clouds)"),
+        LampMode(17, "Giông Bão 360°", "🌩️", "Mưa gió cuồng phong & sấm sét rực sáng (Storm & Lightning)")
     )
 
     val SMART_ROUTINES_DEFAULT = SmartRoutineConfig()

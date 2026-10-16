@@ -65,8 +65,8 @@ class WeatherTimeWorker(
             val routineConfig = prefs.smartRoutinesFlow.first()
 
             if (ble.isConnected.value) {
-                // Gửi Frame 0x04 [Temp, Weather_ID] cho đèn hiển thị
-                ble.sendWeather(weatherData.temp, weatherData.weatherId)
+                // Gửi Frame 0x04 [Temp, Weather_ID] cho đèn cập nhật ngầm
+                ble.sendWeather(weatherData.temp, weatherData.weatherId, switchMode = false)
 
                 // Chỉ đổi Mode hoạt hình NẾU người dùng đã kích hoạt tự động theo thời tiết
                 if (routineConfig.autoWeatherSync) {

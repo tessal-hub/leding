@@ -57,18 +57,22 @@ void loadSettingsFromFlash();
 // Lấy tên mô tả của chế độ
 const char* getModeName(uint8_t mode);
 
+// Chuyển đổi tuần hoàn qua nút bấm vật lý (loại trừ chế độ số và chế độ test)
+uint8_t getNextCycleMode(uint8_t current);
+uint8_t getPrevCycleMode(uint8_t current);
+
 // ============================================================================
-// CỬ CHỈ VẬT LÝ MPU-6050 (POMODORO & ĐÈN PIN KHẨN CẤP)
+// CỬ CHỈ VẬT LÝ MPU-6050 (ĐÈN XOAY NGANG & ĐÈN PIN KHẨN CẤP)
 // ============================================================================
-extern bool isPomodoroActive;
+extern bool isHorizontalActive;
 extern bool isEmergencyActive;
 extern bool pendingEmergencyFlashlight;
-extern bool pendingPomodoroTrigger;
+extern bool pendingHorizontalTrigger;
 
-bool checkEmergencyShake();       // Nhấc hộp lên lắc mạnh 3 lần -> Đèn pin khẩn cấp
-bool checkPomodoroOrientation();   // Kiểm tra hộp đang nằm nghiêng (> 60 độ)
-bool checkPomodoroTrigger();       // Phát hiện cạnh lật hộp từ đứng sang nghiêng
-bool isLampStationaryOnTable();   // Đặt đèn nằm yên ổn định trên bàn
+bool checkEmergencyShake();         // Nhấc đèn lên lắc mạnh 3 lần -> Đèn pin khẩn cấp
+bool checkHorizontalOrientation();  // Kiểm tra đèn đang nằm ngang (>= 60 độ)
+bool checkHorizontalTrigger();      // Phát hiện hành vi xoay ngang đèn sang một bên
+bool isLampStationaryOnTable();     // Đặt đèn nằm yên ổn định trên bàn
 
 // ============================================================================
 // CHẾ ĐỘ OTA FIRMWARE QUA BLUETOOTH BLE

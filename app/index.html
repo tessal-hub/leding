@@ -1063,6 +1063,47 @@
       from { opacity: 0; transform: scale(0.95); }
       to { opacity: 1; transform: scale(1); }
     }
+
+    /* OTA FIRMWARE UPGRADE UI */
+    .ota-drop-zone {
+      border: 2px dashed var(--md-sys-color-outline-variant);
+      border-radius: 20px;
+      padding: 22px 16px;
+      text-align: center;
+      background: var(--md-sys-color-surface-container-low);
+      cursor: pointer;
+      transition: all 0.25s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .ota-drop-zone:hover, .ota-drop-zone.dragover {
+      border-color: var(--md-sys-color-primary);
+      background: rgba(126, 212, 252, 0.08);
+      box-shadow: 0 0 20px var(--md-sys-color-primary-glow);
+    }
+    .ota-file-chip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--md-sys-color-surface-container-high);
+      border-radius: 14px;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .ota-stat-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 10px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
@@ -1579,10 +1620,24 @@
             </div>
           </div>
 
-          <button class="m3-btn-tonal" style="width:100%;" onclick="refreshWeatherManually()">
+          <button class="m3-btn-tonal" style="width:100%;margin-bottom:14px;" onclick="refreshWeatherManually()">
             <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
             Làm mới & đồng bộ ngay xuống đèn
           </button>
+
+          <!-- TRẢI NGHIỆM TỨC THÌ ANIMATION THỜI TIẾT 360° -->
+          <div>
+            <div style="font-size:0.85rem;font-weight:700;color:var(--md-sys-color-primary);margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+              <svg style="width:16px;height:16px;fill:currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              Trải nghiệm tức thì Animation Thời tiết 360°:
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <button class="m3-btn-tonal" style="padding:8px 10px;font-size:0.8rem;" onclick="triggerWeatherModeDirect(14, 'Nắng đẹp')">☀️ Nắng đẹp (14)</button>
+              <button class="m3-btn-tonal" style="padding:8px 10px;font-size:0.8rem;" onclick="triggerWeatherModeDirect(15, 'Mưa rơi')">🌧️ Mưa rơi (15)</button>
+              <button class="m3-btn-tonal" style="padding:8px 10px;font-size:0.8rem;" onclick="triggerWeatherModeDirect(16, 'Mây trôi')">☁️ Mây trôi (16)</button>
+              <button class="m3-btn-tonal" style="padding:8px 10px;font-size:0.8rem;" onclick="triggerWeatherModeDirect(17, 'Giông bão')">🌩️ Giông bão (17)</button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1613,9 +1668,9 @@
           </div>
 
           <div style="display:flex;gap:12px;margin-top:14px;">
-            <button class="m3-btn-tonal" style="flex:1;" onclick="triggerPomodoroCommand()">
-              <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14h-2V7h2zm0 4h-2v-2h2z"/></svg>
-              Pomodoro 25p
+            <button class="m3-btn-tonal" style="flex:1;" onclick="triggerWarmLightCommand()">
+              <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.22 19.67 10.57 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9zm0 15c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>
+              Đèn vàng ấm
             </button>
             <button class="m3-btn-tonal" style="flex:1;" onclick="syncSystemTimeNow()">
               <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14h-2V7h2zm0 4h-2v-2h2z"/></svg>
@@ -1651,30 +1706,67 @@
                 <svg style="width:24px;height:24px;fill:currentColor" viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
               </div>
               <div>
-                <div class="card-header-title">Nạp Firmware BLE (OTA)</div>
-                <div class="card-header-desc">Nâng cấp phần mềm không dây trực tiếp từ trình duyệt</div>
+                <div class="card-header-title">Nạp Firmware BLE (Web OTA)</div>
+                <div class="card-header-desc">Nâng cấp không dây trực tiếp từ file .bin (PlatformIO build)</div>
+              </div>
+            </div>
+            <span id="otaConnBadge" class="ota-stat-badge" style="background:rgba(255,180,171,0.18);color:var(--md-sys-color-error);">
+              🔴 Chưa kết nối BLE
+            </span>
+          </div>
+
+          <!-- Drag and Drop Zone -->
+          <div id="otaDropZone" class="ota-drop-zone" onclick="document.getElementById('otaFileInput').click()">
+            <input type="file" id="otaFileInput" accept=".bin" style="display:none;" onchange="handleOtaFileSelect(this.files)">
+            <div style="width:48px;height:48px;border-radius:50%;background:rgba(126, 212, 252, 0.15);display:flex;align-items:center;justify-content:center;color:var(--md-sys-color-primary);">
+              <svg style="width:26px;height:26px;fill:currentColor" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+            </div>
+            <div>
+              <div style="font-weight:700;font-size:0.95rem;color:#fff;">Kéo thả file firmware (.bin) vào đây hoặc bấm để chọn</div>
+              <div style="font-size:0.8rem;color:var(--md-sys-color-on-surface-variant);margin-top:4px;">
+                File build tại: <code>.pio/build/esp32-c3-devkitm-1/firmware.bin</code>
               </div>
             </div>
           </div>
 
-          <div style="display:flex;gap:12px;margin-bottom:14px;">
-            <button class="m3-btn-tonal" style="flex:1;" onclick="sendCommand('ota')">Vào mode OTA</button>
-            <button class="m3-btn-tonal" style="flex:1;" onclick="sendCommand('ota abort')">Hủy OTA</button>
+          <!-- Selected File Info & Action -->
+          <div id="otaFileInfoBlock" style="display:none;margin-top:12px;">
+            <div class="ota-file-chip">
+              <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                <svg style="width:20px;height:20px;fill:var(--md-sys-color-primary);flex-shrink:0;" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                <div style="min-width:0;">
+                  <div id="otaSelectedFileName" style="font-weight:700;font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;">firmware.bin</div>
+                  <div id="otaSelectedFileSize" style="font-size:0.75rem;color:var(--md-sys-color-on-surface-variant);">0 KB</div>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button class="m3-btn-tonal" style="padding:8px 12px;font-size:0.8rem;" onclick="clearOtaSelectedFile()">Đổi file</button>
+                <button id="btnStartOta" class="m3-btn-primary" style="padding:8px 16px;font-size:0.8rem;" onclick="startOtaFlashing()">
+                  🚀 Nạp ngay
+                </button>
+              </div>
+            </div>
           </div>
 
-          <input type="file" id="otaFileInput" accept=".bin" style="display:none;" onchange="onOtaFileSelected(this.files)">
-          <button class="m3-btn-primary" style="width:100%;height:48px;" onclick="document.getElementById('otaFileInput').click()">
-            <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
-            Chọn file firmware.bin để nạp
-          </button>
-
-          <div id="otaProgressBlock" style="display:none;margin-top:14px;">
-            <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:6px;">
-              <span id="otaStatusLabel">Đang chuẩn bị...</span>
-              <span id="otaPercentLabel" style="font-weight:700;color:var(--md-sys-color-primary);">0%</span>
+          <!-- Active OTA Progress Box -->
+          <div id="otaProgressBlock" style="display:none;margin-top:14px;background:var(--md-sys-color-surface-container-high);border-radius:16px;padding:16px;border:1px solid var(--md-sys-color-outline-variant);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <div>
+                <span id="otaStatusLabel" style="font-size:0.85rem;font-weight:600;color:#fff;">Đang chuẩn bị...</span>
+                <div id="otaSubStatusLabel" style="font-size:0.75rem;color:var(--md-sys-color-on-surface-variant);margin-top:2px;">0 / 0 KB (0 KB/s) - ETA: --</div>
+              </div>
+              <span id="otaPercentLabel" style="font-size:1.3rem;font-weight:800;color:var(--md-sys-color-primary);font-family:var(--font-mono);">0%</span>
             </div>
-            <div style="height:8px;border-radius:4px;background:var(--md-sys-color-surface-container-highest);overflow:hidden;">
-              <div id="otaProgressBar" style="height:100%;width:0%;background:var(--md-sys-color-primary);transition:width 0.1s;"></div>
+
+            <div style="height:10px;border-radius:6px;background:var(--md-sys-color-surface-container-highest);overflow:hidden;position:relative;">
+              <div id="otaProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg, var(--md-sys-color-primary), #a78bfa);transition:width 0.15s ease-out;"></div>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
+              <span id="otaChunkInfoLabel" style="font-size:0.75rem;color:var(--md-sys-color-on-surface-variant);font-family:var(--font-mono);">Packet: -- bytes</span>
+              <button class="m3-btn-tonal" style="padding:6px 14px;font-size:0.8rem;background:rgba(255,180,171,0.15);color:var(--md-sys-color-error);border-color:rgba(255,180,171,0.3);" onclick="abortOtaTransfer()">
+                ✕ Hủy nạp
+              </button>
             </div>
           </div>
         </div>
@@ -1782,24 +1874,26 @@
     const NUS_RX_UUID      = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // Ghi xuống ESP32
     const NUS_TX_UUID      = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // Notify từ ESP32
 
-    // 15 CHẾ ĐỘ HIỆU ỨNG (KHỚP 100% VỚI FIRMWARE ESP32)
+    // 13 CHẾ ĐỘ HIỆU ỨNG TÌNH YÊU & LÃNG MẠN 360° (KHỚP 100% VỚI FIRMWARE ESP32)
     const MODES = [
-      { id: 0, name: "Tự động đổi", icon: "🔄", desc: "Auto-Cycle chuyển giao diện tuần hoàn" },
-      { id: 1, name: "Dung nham 3D", icon: "🌋", desc: "Lava Noise 3D chuyển động mượt mà (Mặc định)" },
-      { id: 2, name: "Đèn viền góc", icon: "📐", desc: "Đèn viền 4 cạnh góc hộp tối giản cao cấp" },
-      { id: 3, name: "Sóng nhịp 4 mặt", icon: "🌊", desc: "Sóng nhịp chuyển sắc mượt khi xoay 360°" },
-      { id: 4, name: "Nghiêng & Lắc MPU", icon: "🎯", desc: "Tương tác cảm biến gia tốc bừng sáng" },
-      { id: 5, name: "Vật lý nước MPU", icon: "💧", desc: "Showpiece sóng nước & giọt bắn theo trọng lực" },
-      { id: 6, name: "Nhịp thở ban đêm", icon: "🌙", desc: "Đèn ngủ êm dịu thư thái, không chói mắt" },
-      { id: 7, name: "Cực quang uốn lượn", icon: "🌌", desc: "Dải cực quang huyền ảo sắc tím - cyan" },
-      { id: 8, name: "Dò hướng LED", icon: "🔍", desc: "Calibration test kiểm tra chuỗi LED 0..255" },
+      { id: 0, name: "Tự động đổi cảnh", icon: "🔄", desc: "Auto-Cycle chuyển giao diện lãng mạn tuần hoàn" },
+      { id: 1, name: "Nhịp đập trái tim", icon: "❤️", desc: "Trái tim bừng sáng đập nhịp tình yêu nồng nàn (Mặc định)" },
+      { id: 2, name: "Pha Lê Thạch Anh Tím", icon: "💎", desc: "Khối thạch anh hoàng gia lung linh tia sáng kim cương 360°" },
+      { id: 3, name: "Ánh nến hẹn hò", icon: "🕯️", desc: "Ánh nến lung linh ấm áp bập bùng bữa tối hai người" },
+      { id: 4, name: "Cử chỉ yêu thương", icon: "✨", desc: "Nghiêng & chạm MPU quầng sáng âu yếm theo tay" },
+      { id: 5, name: "Lửa ấm đêm đông", icon: "🔥", desc: "Lò sưởi ấm cúng bập bùng & tàn than hồng lách tách" },
+      { id: 6, name: "Hoa Oải Hương Tím", icon: "🪻", desc: "Biển hoa oải hương tím dập dờn trong gió & đom đóm hoàng hôn" },
+      { id: 7, name: "Cực quang tình nhân", icon: "🌌", desc: "Dải cực quang huyền ảo sắc tím - hồng mộng mơ" },
+      { id: 8, name: "Bầu trời ngàn sao", icon: "⭐", desc: "Vòm trời tinh vân tím huyền ảo, ngàn sao lấp lánh & sao băng ước nguyện" },
       { id: 9, name: "Tắt đèn / Chờ", icon: "💤", desc: "Standby tiết kiệm pin & màn hình đen" },
-      { id: 10, name: "Màu tĩnh theo App", icon: "🎨", desc: "Đổi màu theo bảng màu RGB tùy chọn" },
-      { id: 11, name: "4 Ô Bitmap tùy biến", icon: "🖼️", desc: "Hiển thị 4 tranh độc lập trên 4 mặt trụ" },
-      { id: 12, name: "Đồng hồ để bàn 360°", icon: "⏰", desc: "Đồng hồ số để bàn & hiển thị thời tiết" },
-      { id: 13, name: "Nhịp đập trái tim", icon: "❤️", desc: "Hiệu ứng trái tim đập bừng sáng lãng mạn" },
-      { id: 14, name: "Sóng tình yêu lan tỏa", icon: "💖", desc: "Vòng sóng tình yêu lãng mạn mộng mơ" },
-      { id: 15, name: "Thời tiết 360°", icon: "🌦️", desc: "Cảnh thời tiết sống động theo giờ Ngày/Đêm" }
+      { id: 10, name: "Màu tĩnh lãng mạn", icon: "🎨", desc: "Đổi màu theo bảng màu RGB tùy chọn" },
+      { id: 11, name: "Kỷ niệm tình yêu", icon: "🖼️", desc: "Hiển thị 4 tranh kỷ niệm độc lập trên 4 mặt" },
+      { id: 12, name: "Đóa hồng hé nở", icon: "🌹", desc: "Đóa hoa hồng ruby kiêu sa bung nở từng lớp cánh tình yêu" },
+      { id: 13, name: "Chữ Chạy 360°", icon: "💬", desc: "Dải ruy-băng tin nhắn chạy quanh thân đèn (Marquee)" },
+      { id: 14, name: "Nắng Đẹp 360°", icon: "☀️", desc: "Mặt trời & tia nắng xoay tròn theo giờ (Clear Sky)" },
+      { id: 15, name: "Mưa Rơi 360°", icon: "🌧️", desc: "Hạt mưa rơi & sóng nước bắn tung tóe (Rain & Puddles)" },
+      { id: 16, name: "Mây Trời 360°", icon: "☁️", desc: "Mây trôi đa tầng bồng bềnh 360° (Volumetric Clouds)" },
+      { id: 17, name: "Giông Bão 360°", icon: "🌩️", desc: "Mưa gió cuồng phong & sấm sét rực sáng (Storm & Lightning)" }
     ];
 
     // 9 MÀU PRESET CHUẨN M3
@@ -1868,6 +1962,7 @@
       renderNotifApps();
       loadRoutineSettings();
       fetchWeatherAuto();
+      initOtaDropZone();
 
       // Kiểm tra nếu người dùng đang mở trực tiếp file:///
       if (location.protocol === "file:") {
@@ -2062,6 +2157,20 @@
         mLbl.innerText = "Kết nối";
         mBtn.classList.remove("active");
       }
+
+      // Cập nhật trạng thái Card Web OTA
+      const otaBadge = document.getElementById("otaConnBadge");
+      if (otaBadge) {
+        if (connected) {
+          otaBadge.style.background = "rgba(100, 255, 218, 0.15)";
+          otaBadge.style.color = "var(--green-jade, #64ffda)";
+          otaBadge.innerText = "🟢 Sẵn sàng nạp OTA";
+        } else {
+          otaBadge.style.background = "rgba(255, 180, 171, 0.18)";
+          otaBadge.style.color = "var(--md-sys-color-error, #ffb4ab)";
+          otaBadge.innerText = "🔴 Chưa kết nối BLE";
+        }
+      }
     }
 
     // HÀNG ĐỢI TUẦN TỰ PROMISE CHO GATT BLE (CHỐNG MẤT GÓI KHI GỌI ĐỒNG THỜI)
@@ -2113,19 +2222,23 @@
         const d = JSON.parse(raw);
         if (d.ota !== undefined) {
           const statusLabel = document.getElementById("otaStatusLabel");
+          const subStatusLabel = document.getElementById("otaSubStatusLabel");
           const progBar = document.getElementById("otaProgressBar");
           const progLabel = document.getElementById("otaPercentLabel");
-          if (d.ota === "ready") {
-            showToast("Đèn đã vào chế độ OTA!");
+          if (d.ota === "start" || d.ota === "ready") {
+            log("ESP32 phản hồi: Đèn đã sẵn sàng nhận luồng dữ liệu OTA!");
           } else if (d.ota === "prog" && d.p !== undefined) {
             if (progBar) progBar.style.width = d.p + "%";
             if (progLabel) progLabel.innerText = d.p + "%";
           } else if (d.ota === "success") {
-            if (statusLabel) statusLabel.innerText = "Nạp thành công! Đèn đang khởi động lại...";
-            showToast("ESP32 xác nhận nạp OTA thành công!");
+            isOtaInProgress = false;
+            if (statusLabel) statusLabel.innerText = "Nạp thành công 100%! Đèn đang khởi động lại...";
+            if (subStatusLabel) subStatusLabel.innerText = "ESP32 đã xác thực phân vùng OTA thành công.";
+            showToast("ESP32 xác nhận nạp OTA thành công!", "🎉");
           } else if (d.ota === "error" || d.ota === "timeout" || d.ota === "aborted") {
             isOtaInProgress = false;
             if (statusLabel) statusLabel.innerText = `Lỗi OTA từ đèn: ${d.ota} (Mã: ${d.err ?? -1})`;
+            if (subStatusLabel) subStatusLabel.innerText = "Quá trình nạp bị gián đoạn.";
             showToast(`Lỗi OTA: ${d.ota}`, "✕");
           }
           return;
@@ -2728,7 +2841,7 @@
       await new Promise(r => setTimeout(r, 2000));
       sendBytes(new Uint8Array([0x01, 255, 190, 40, 75])); // Vàng sáng
       await new Promise(r => setTimeout(r, 2000));
-      selectMode(12); // Mode 12 Đồng hồ 360°
+      selectMode(1); // Mode 1: Dung nham 3D
       showToast("Hoàn tất kịch bản bình minh thức dậy!");
     }
 
@@ -2774,8 +2887,8 @@
           const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
           document.getElementById("weatherAutoSyncStatusText").innerText = `Tự động đồng bộ mỗi 15 phút (vừa cập nhật lúc ${timeStr})`;
 
-          // Gửi Frame 0x04 xuống ESP32: [0x04, Temp_Signed, Weather_ID]
-          sendBytes(new Uint8Array([0x04, temp, id]));
+          // Gửi Frame 0x04 xuống ESP32: [0x04, Temp_Signed, Weather_ID, SwitchMode=0]
+          sendBytes(new Uint8Array([0x04, temp, id, 0]));
 
           // Tự đổi mode nếu người dùng bật công tắc
           if (document.getElementById("switchAutoWeather").checked) {
@@ -2794,20 +2907,26 @@
       showToast("Đã làm mới & đồng bộ thời tiết + RTC!");
     }
 
+    function triggerWeatherModeDirect(modeId, name) {
+      selectMode(modeId);
+      showToast(`Đang chạy animation: ${name} (Mode ${modeId})`);
+    }
+
     function parseWeatherCode(code) {
-      if (code === 0) return { name: "Trời Nắng", icon: "☀️", id: 1, mode: 1 };
-      if (code <= 3) return { name: "Có Mây", icon: "⛅", id: 2, mode: 3 };
-      if (code <= 67) return { name: "Trời Mưa", icon: "🌧️", id: 3, mode: 5 };
-      if (code >= 95) return { name: "Sấm Chớp", icon: "⚡", id: 4, mode: 7 };
-      return { name: "Quang Mây", icon: "🌤️", id: 1, mode: 1 };
+      if (code === 0) return { name: "Trời Nắng", icon: "☀️", id: 1, mode: 14 };
+      if (code <= 3) return { name: "Có Mây", icon: "⛅", id: 2, mode: 16 };
+      if (code <= 67) return { name: "Trời Mưa", icon: "🌧️", id: 3, mode: 15 };
+      if (code >= 95) return { name: "Sấm Chớp", icon: "⚡", id: 4, mode: 17 };
+      return { name: "Quang Mây", icon: "🌤️", id: 1, mode: 14 };
     }
 
     // ========================================================================
     // 7. THIẾT BỊ: POMODORO, RTC, MÔ PHỎNG THÔNG BÁO & OTA
     // ========================================================================
-    function triggerPomodoroCommand() {
-      sendCommand("pomo");
-      showToast("Đã kích hoạt đồng hồ Pomodoro 25p!");
+    function triggerWarmLightCommand() {
+      // Đặt màu tĩnh vàng ấm 2200K (RGB 255, 160, 40) thân thiện cho mắt
+      sendBytes(new Uint8Array([0x01, 255, 160, 40]));
+      showToast("Đã bật ánh sáng vàng thân thiện mắt!");
     }
 
     function syncSystemTimeNow() {
@@ -2845,68 +2964,255 @@
       showToast(`Chớp đèn thông báo ${name}!`);
     }
 
-    // OTA FIRMWARE FLASHER QUA WEB BLUETOOTH
-    async function onOtaFileSelected(files) {
+    // ========================================================================
+    // NÂNG CẤP BỘ NẠP FIRMWARE BLE (WEB OTA) - CHUẨN TỐC ĐỘ CAO & KHÔNG MẤT GÓI
+    // ========================================================================
+    let selectedOtaFile = null;
+    let otaAbortController = false;
+
+    function initOtaDropZone() {
+      const dropZone = document.getElementById("otaDropZone");
+      if (!dropZone) return;
+
+      ['dragenter', 'dragover'].forEach(evt => {
+        dropZone.addEventListener(evt, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.add("dragover");
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(evt => {
+        dropZone.addEventListener(evt, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.remove("dragover");
+        });
+      });
+
+      dropZone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        if (dt && dt.files && dt.files.length) {
+          handleOtaFileSelect(dt.files);
+        }
+      });
+    }
+
+    function handleOtaFileSelect(files) {
       if (!files || !files.length) return;
       const file = files[0];
+      if (!file.name.toLowerCase().endsWith('.bin')) {
+        showToast("Vui lòng chọn file firmware định dạng .bin!", "⚠️");
+        return;
+      }
+      if (file.size > 2000000) {
+        showToast("File vượt quá kích thước phân vùng OTA (tối đa ~1.9MB)!", "⚠️");
+        return;
+      }
+      selectedOtaFile = file;
+
+      const infoBlock = document.getElementById("otaFileInfoBlock");
+      const nameLabel = document.getElementById("otaSelectedFileName");
+      const sizeLabel = document.getElementById("otaSelectedFileSize");
+      if (infoBlock) infoBlock.style.display = "block";
+      if (nameLabel) nameLabel.innerText = file.name;
+      if (sizeLabel) sizeLabel.innerText = `${(file.size / 1024).toFixed(1)} KB (${file.size.toLocaleString()} bytes)`;
+      showToast(`Đã chọn: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+    }
+
+    function clearOtaSelectedFile() {
+      selectedOtaFile = null;
+      const fileInput = document.getElementById("otaFileInput");
+      if (fileInput) fileInput.value = "";
+      const infoBlock = document.getElementById("otaFileInfoBlock");
+      if (infoBlock) infoBlock.style.display = "none";
+    }
+
+    // Ghi trực tiếp xuống GATT BLE không nuốt lỗi, ưu tiên writeValueWithoutResponse
+    async function directBleWrite(chunk, writeWithResponse = false) {
+      if (!isConnected || !rxChar) throw new Error("Chưa kết nối Bluetooth với đèn!");
+      if (!writeWithResponse && typeof rxChar.writeValueWithoutResponse === 'function') {
+        await rxChar.writeValueWithoutResponse(chunk);
+      } else {
+        await rxChar.writeValue(chunk);
+      }
+    }
+
+    async function startOtaFlashing() {
+      if (!selectedOtaFile) {
+        showToast("Vui lòng chọn file firmware .bin trước!", "⚠️");
+        return;
+      }
       if (!isConnected) {
-        showToast("Vui lòng kết nối Bluetooth tới đèn trước!", "⚠️");
+        showToast("Vui lòng kết nối Bluetooth tới đèn trước khi nạp!", "⚠️");
+        return;
+      }
+      if (isOtaInProgress) {
+        showToast("Đang có tiến trình nạp OTA đang chạy!", "⚠️");
         return;
       }
 
-      showToast(`Bắt đầu chuẩn bị nạp: ${file.name} (${file.size} bytes)...`);
+      const file = selectedOtaFile;
       const buffer = await file.arrayBuffer();
       const bytes = new Uint8Array(buffer);
+      const sz = bytes.length;
 
       const progBlock = document.getElementById("otaProgressBlock");
       const progBar = document.getElementById("otaProgressBar");
       const progLabel = document.getElementById("otaPercentLabel");
       const statusLabel = document.getElementById("otaStatusLabel");
+      const subStatusLabel = document.getElementById("otaSubStatusLabel");
+      const chunkInfoLabel = document.getElementById("otaChunkInfoLabel");
+      const btnStart = document.getElementById("btnStartOta");
 
       progBlock.style.display = "block";
       progBar.style.width = "0%";
-      statusLabel.innerText = "Đang gửi lệnh bắt đầu OTA...";
+      progLabel.innerText = "0%";
+      statusLabel.innerText = "Đang gửi lệnh khởi tạo OTA và chuẩn bị Flash...";
+      subStatusLabel.innerText = `0 / ${(sz / 1024).toFixed(1)} KB (Đang chuẩn bị)`;
+      if (btnStart) btnStart.disabled = true;
 
       isOtaInProgress = true;
-      try {
-        // Frame 0x10: [0x10, Size0, Size1, Size2, Size3] Little Endian
-        const sz = bytes.length;
-        const startPkt = new Uint8Array([0x10, sz & 0xFF, (sz >> 8) & 0xFF, (sz >> 16) & 0xFF, (sz >> 24) & 0xFF]);
-        await sendBytes(startPkt);
-        await new Promise(r => setTimeout(r, 300));
+      otaAbortController = false;
 
-        const chunkSize = 240;
+      let optimalChunkSize = 240;
+      const candidateSizes = [240, 128, 64, 20];
+      let workingSizeFound = false;
+
+      try {
+        // Bước 1: Gửi Frame 0x10: [0x10, Size0, Size1, Size2, Size3 (LE)]
+        const startPkt = new Uint8Array([
+          0x10,
+          sz & 0xFF,
+          (sz >> 8) & 0xFF,
+          (sz >> 16) & 0xFF,
+          (sz >> 24) & 0xFF
+        ]);
+
+        await directBleWrite(startPkt, true);
+        log(`-> Bắt đầu nạp OTA: Kích thước ${sz.toLocaleString()} bytes`);
+
+        // Đợi 500ms để ESP32 xóa phân vùng Flash và cấp phát OTA buffer
+        statusLabel.innerText = "Đang xóa phân vùng Flash trên ESP32...";
+        await new Promise(r => setTimeout(r, 500));
+
         let sent = 0;
+        const startTime = Date.now();
+        let lastSpeedTime = startTime;
+        let lastSpeedSent = 0;
+        let currentSpeedKbps = 0;
 
         while (sent < sz) {
-          if (!isOtaInProgress) throw new Error("Tiến trình OTA đã bị hủy hoặc lỗi từ thiết bị.");
-          const end = Math.min(sent + chunkSize, sz);
+          if (otaAbortController || !isOtaInProgress) {
+            throw new Error("Tiến trình OTA đã bị người dùng hủy.");
+          }
+
+          const end = Math.min(sent + optimalChunkSize, sz);
           const chunkData = bytes.slice(sent, end);
-          // Frame 0x11: [0x11, Data...]
           const packet = new Uint8Array(1 + chunkData.length);
           packet[0] = 0x11;
           packet.set(chunkData, 1);
-          await sendBytes(packet);
 
+          let chunkSuccess = false;
+          let retries = 3;
+
+          while (retries > 0 && !chunkSuccess) {
+            try {
+              await directBleWrite(packet, false);
+              chunkSuccess = true;
+            } catch (writeErr) {
+              // Tự động hạ kích thước MTU nếu OS/BLE stack giới hạn kích thước gói
+              if (!workingSizeFound && candidateSizes.indexOf(optimalChunkSize) < candidateSizes.length - 1) {
+                const nextIdx = candidateSizes.indexOf(optimalChunkSize) + 1;
+                optimalChunkSize = candidateSizes[nextIdx];
+                log(`Hạ kích thước gói OTA xuống ${optimalChunkSize} bytes để phù hợp MTU`);
+                break;
+              }
+
+              retries--;
+              if (retries === 0) {
+                throw new Error(`Lỗi truyền BLE chunk tại byte ${sent}: ${writeErr.message}`);
+              }
+              await new Promise(r => setTimeout(r, 50));
+            }
+          }
+
+          if (!chunkSuccess) {
+            continue; // Thử lại với chunk size nhỏ hơn
+          }
+
+          workingSizeFound = true;
           sent = end;
+
+          // Cập nhật tốc độ và thời gian còn lại
+          const now = Date.now();
+          if (now - lastSpeedTime >= 350) {
+            const timeDiffSec = (now - lastSpeedTime) / 1000;
+            const bytesDiff = sent - lastSpeedSent;
+            currentSpeedKbps = (bytesDiff / 1024) / timeDiffSec;
+            lastSpeedTime = now;
+            lastSpeedSent = sent;
+          }
+
           const pct = Math.round(sent * 100 / sz);
           progBar.style.width = pct + "%";
           progLabel.innerText = pct + "%";
-          statusLabel.innerText = `Đang nạp Flash: ${sent} / ${sz} bytes...`;
 
-          await new Promise(r => setTimeout(r, 20));
+          const remainingBytes = sz - sent;
+          const etaSec = currentSpeedKbps > 0 ? Math.round(remainingBytes / (currentSpeedKbps * 1024)) : 0;
+          const etaStr = etaSec > 0 ? `${etaSec}s` : `--`;
+
+          statusLabel.innerText = `Đang nạp Firmware: ${pct}%`;
+          subStatusLabel.innerText = `${(sent / 1024).toFixed(1)} / ${(sz / 1024).toFixed(1)} KB (${currentSpeedKbps.toFixed(1)} KB/s) - Còn lại: ${etaStr}`;
+          chunkInfoLabel.innerText = `Packet: ${optimalChunkSize}B | Đã gửi: ${(sent / 1024).toFixed(1)} KB`;
+
+          // Micro-pause điều tiết dòng để chống tràn bộ đệm GATT stack
+          await new Promise(r => setTimeout(r, 12));
         }
 
-        // Frame 0x12: OTA End
-        await new Promise(r => setTimeout(r, 150));
-        await sendBytes(new Uint8Array([0x12]));
-        statusLabel.innerText = "Đã gửi xong! Đang chờ ESP32 kiểm tra toàn vẹn...";
+        // Bước 3: Gửi Frame 0x12: Kết thúc OTA
+        statusLabel.innerText = "Đã gửi 100%! Đang kiểm tra tính toàn vẹn (CRC/SHA256)...";
+        subStatusLabel.innerText = "Vui lòng giữ nguồn, đèn sẽ tự khởi động lại sau giây lát...";
+        await new Promise(r => setTimeout(r, 200));
+
+        await directBleWrite(new Uint8Array([0x12]), true);
+        log("-> Đã gửi kết thúc OTA (0x12). Đang chờ ESP32 kiểm tra hoàn tất...");
+        showToast("Đã nạp xong 100%! Đang kích hoạt bản firmware mới...", "✓");
+
+        setTimeout(() => {
+          if (isOtaInProgress) {
+            isOtaInProgress = false;
+            statusLabel.innerText = "Hoàn tất! Đèn đang khởi động lại vào firmware mới.";
+            showToast("Nạp OTA thành công! Đèn đang khởi động lại.", "🎉");
+          }
+        }, 3000);
+
       } catch (err) {
-        statusLabel.innerText = "Lỗi OTA: " + err.message;
+        log("LỖI OTA: " + err.message);
+        statusLabel.innerText = "Lỗi: " + err.message;
+        subStatusLabel.innerText = "Đã dừng nạp firmware.";
         showToast("Lỗi nạp OTA: " + err.message, "✕");
+        try {
+          await directBleWrite(new Uint8Array([0x13]), false);
+        } catch (_) {}
       } finally {
+        if (btnStart) btnStart.disabled = false;
         isOtaInProgress = false;
       }
+    }
+
+    async function abortOtaTransfer() {
+      if (!isOtaInProgress) return;
+      otaAbortController = true;
+      isOtaInProgress = false;
+      const statusLabel = document.getElementById("otaStatusLabel");
+      const subStatusLabel = document.getElementById("otaSubStatusLabel");
+      if (statusLabel) statusLabel.innerText = "Đã hủy nạp firmware!";
+      if (subStatusLabel) subStatusLabel.innerText = "Đã gửi tín hiệu dừng tới ESP32.";
+      try {
+        await directBleWrite(new Uint8Array([0x13]), false);
+      } catch (_) {}
+      showToast("Đã hủy quá trình nạp OTA.", "ℹ");
     }
 
     function sendCliCommand() {

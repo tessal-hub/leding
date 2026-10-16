@@ -59,19 +59,19 @@ class WeatherRepository {
             weatherName = "Trời Nắng (Ngoại tuyến)",
             weatherIcon = "☀️",
             weatherId = 1,
-            recommendedModeId = 1,
+            recommendedModeId = 14,
             cityName = cityName
         )
     }
 
     private fun parseWmoWeatherCode(code: Int): Quadruple<String, String, Int, Int> {
         return when (code) {
-            0 -> Quadruple("Nắng đẹp", "☀️", 1, 1) // Mode 1: Lava Noise (Sáng rực rỡ)
-            1, 2 -> Quadruple("Ít mây", "⛅", 2, 6) // Mode 6: Night Breathing
-            3, 45, 48 -> Quadruple("Nhiều mây / Sương mù", "☁️", 2, 2) // Mode 2: Edge Light
-            51, 53, 55, 61, 63, 65, 80, 81, 82 -> Quadruple("Có mưa", "🌧️", 3, 5) // Mode 5: Water Physics
-            95, 96, 99 -> Quadruple("Giông sấm chớp", "🌩️", 4, 4) // Mode 4: Tilt Glow
-            else -> Quadruple("Thời tiết dịu mát", "🌤️", 1, 3) // Mode 3: Face Wave
+            0 -> Quadruple("Nắng đẹp", "☀️", 1, 14) // Mode 14: Nắng Đẹp 360° (Mặt trời & tia nắng xoay)
+            1, 2 -> Quadruple("Ít mây", "⛅", 2, 16) // Mode 16: Mây Trời 360° (Volumetric Clouds)
+            3, 45, 48 -> Quadruple("Nhiều mây / Sương mù", "☁️", 2, 16) // Mode 16: Mây Trời 360°
+            51, 53, 55, 61, 63, 65, 80, 81, 82 -> Quadruple("Có mưa", "🌧️", 3, 15) // Mode 15: Mưa Rơi 360° (Rain & Puddles)
+            95, 96, 99 -> Quadruple("Giông sấm chớp", "🌩️", 4, 17) // Mode 17: Giông Bão 360° (Storm & Lightning)
+            else -> Quadruple("Nắng dịu", "🌤️", 1, 14) // Mode 14: Nắng Đẹp 360°
         }
     }
 

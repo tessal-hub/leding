@@ -2,47 +2,38 @@
 #include <Arduino.h>
 #include "config.h"
 
-// Mode 8: Hiệu ứng kiểm tra chiều đi dây từng bóng từ LED 0 -> 255 (Calibration Test)
-void effectLedOrderTest(uint16_t stepDelayMs = 35);
-
 // ============================================================================
-// CÁC CHẾ ĐỘ HIỂN THỊ CHÍNH (TUYỂN CHỌN CHO HỘP VUÔNG 4 MẶT 360°)
+// CÁC CHẾ ĐỘ HIỂN THỊ CHÍNH (BỘ SƯU TẬP HIỆU ỨNG TÌNH YÊU & LÃNG MẠN 360°)
 // ============================================================================
-// Mode 1: Đèn dung nham 3D Noise mượt mà bao quanh 4 mặt (Lava Noise - Mặc định)
-void effectLavaNoise(uint32_t durationMs);
+// Mode 1: Nhịp đập trái tim lãng mạn (Heartbeat Pulse - Mặc định)
+void effectHeartbeatPulse(uint32_t durationMs = 60000);
 
-// Mode 2: Đèn viền 4 cạnh góc hộp (Edge Light: 4 cạnh sáng thở nhẹ, nền tối cao cấp)
-void effectEdgeLight(uint32_t durationMs);
+// Mode 2: Pha Lê Thạch Anh Tím (Amethyst Crystal Dream - Cột đá quý lung linh 360°)
+void effectAmethystCrystal(uint32_t durationMs = 60000);
 
-// Mode 3: Sóng nhịp 4 mặt hộp (Face Wave: mỗi mặt 1 nhịp lệch pha, chuyển màu mượt)
-void effectFaceWave(uint32_t durationMs);
+// Mode 3: Ánh nến hẹn hò lung linh (Candlelight Romance - Ngọn lửa ấm áp)
+void effectCandlelight(uint32_t durationMs = 60000);
 
-// Mode 4: Đèn nghiêng dính theo chiều nghiêng & bừng sáng khi lắc MPU (Tilt Glow)
-void effectTiltGlow(uint32_t durationMs);
+// Mode 4: Cử chỉ yêu thương MPU (Love Tilt & Caress - Ánh sáng âu yếm theo góc nghiêng)
+void effectTiltGlow(uint32_t durationMs = 60000);
 
-// Mode 5: Mô phỏng nước chảy & vật lý sóng xô lệch MPU-6050 (Water Physics)
-void effectWaterPhysics(uint32_t durationMs);
+// Mode 5: Lửa ấm đêm đông (Cozy Fireplace Romance - Lò sưởi ấm áp tình nồng)
+void effectCozyFireplace(uint32_t durationMs = 60000);
 
-// Mode 6: Gradient hai màu thở chậm tối giản cam san hô - hồng tím (Night Breathing)
-void effectBreathingGradient(uint32_t durationMs);
+// Mode 6: Biển Hoa Oải Hương Tím (Lavender Twilight Breeze - Cánh đồng tím hoàng hôn)
+void effectLavenderBreeze(uint32_t durationMs = 60000);
 
-// Mode 7: Dải màu cực quang uốn lượn tím - cyan (Aurora Flow)
-void effectAurora(uint32_t durationMs);
+// Mode 7: Cực quang tình nhân (Lover's Aurora - Tím mộng mơ & hồng cánh sen)
+void effectAurora(uint32_t durationMs = 60000);
 
-// Mode 10: Chế độ màu tĩnh tùy chọn theo App (Static Color)
-void effectStaticColor();
+// Mode 8: Bầu trời ngàn sao hẹn ước (Starry Night Romance - Sao băng ước nguyện)
+void effectStarryNight(uint32_t durationMs = 60000);
 
-// Mode 11: Hiển thị 4 ô Bitmap tùy biến độc lập theo 4 mặt (4-Slot Custom Display)
+// Mode 10: Chế độ màu tĩnh tùy chọn theo App (Static Color - phản ứng chuyển động MPU)
+void effectStaticColor(uint32_t durationMs = 60000);
+
+// Mode 11: 4 Khung hình kỷ niệm tình yêu (4-Slot Love Memories)
 void effectFourSlotsCustom(uint32_t durationMs = 60000);
-
-// Mode 12: Đồng hồ để bàn 360 độ kỹ thuật số & thời tiết (Desk Clock)
-void effectDeskClock(uint32_t durationMs = 60000);
-
-// Mode 13: Nhịp đập trái tim lãng mạn (Heartbeat Pulse)
-void effectHeartbeatPulse(uint32_t durationMs);
-
-// Mode 14: Sóng tình yêu lan tỏa (Love Ripple)
-void effectLoveRipple(uint32_t durationMs);
 
 // Đồng bộ và đọc thời gian hệ thống RTC (Frame 0x05)
 void syncDeviceTime(uint8_t hour, uint8_t minute, uint8_t second);
@@ -57,24 +48,45 @@ void effectChargingAmber(uint32_t durationMs = 0);
 // Sạc đầy: Đèn xanh lá tĩnh dịu mắt báo pin đầy 100%
 void effectChargeFullGreen(uint32_t durationMs = 0);
 
-// Chạy chữ 360 độ quanh trụ ma trận LED (mặc định 75ms)
-void effectCylinderScrollText(const char* text, uint32_t color, uint16_t speedDelay = 75);
+// Chạy chữ 360 độ quanh trụ ma trận LED (mặc định 125ms mượt mà)
+void effectCylinderScrollText(const char* text, uint32_t color, uint16_t speedDelay = 125);
+
+// Mode 13: Chạy chữ 360° lãng mạn liên tục quanh thân đèn (Romantic Cylinder Marquee)
+void effectMarqueeMode(uint32_t durationMs = 60000);
+
+// Cài đặt và truy xuất trạng thái chữ chạy 360°
+void setMarqueeState(const char* text, uint32_t color = 0, uint16_t speedDelay = 125);
+void getMarqueeState(char* text, size_t maxLen, uint32_t &color, uint16_t &speedDelay);
 
 // Chớp báo thông báo hệ thống (Zalo, Messenger, Call) - Frame 0x03
 void triggerNotificationFlash(uint8_t r, uint8_t g, uint8_t b, uint8_t count = 3, uint16_t delayMs = 150);
 
-// Đồng hồ Pomodoro vật lý: Lật hộp -> Đếm lùi 25p, dải LED hạ dần
-void effectPomodoro(uint32_t workDurationMs = POMODORO_WORK_MS);
+// Ánh sáng vàng thân thiện mắt khi đèn xoay ngang (dựng đứng tự thoát)
+void effectHorizontalWarmLight(uint32_t maxDurationMs = 0);
 
 // Đèn pin khẩn cấp: Lắc 3 lần -> Sáng trắng 100% soi đường 60s, đặt xuống bàn tự tắt
 void effectEmergencyFlashlight(uint32_t durationMs = EMERGENCY_TIMEOUT_MS);
 
 // Cập nhật thông báo thời tiết từ App (Frame 0x04)
-void triggerWeatherUpdate(int8_t temp, uint8_t weatherId, bool showBannerAndSwitchMode = false);
+void triggerWeatherUpdate(int8_t temp, uint8_t weatherId, bool switchMode = false);
 
-// Mode 15: Thời tiết sống động 360° theo giờ Ngày/Đêm (Live Weather Scene)
-void effectWeatherClearSky(uint32_t durationMs = 60000); // ID 1: Nắng (Ngày) / Trăng Sao (Đêm)
-void effectWeatherCloudy(uint32_t durationMs = 60000);   // ID 2: Mây trôi đa tầng 360°
-void effectWeatherRain(uint32_t durationMs = 60000);     // ID 3: Mưa rơi Sub-pixel & Vũng nước đáy
-void effectWeatherStorm(uint32_t durationMs = 60000);    // ID 4: Mưa giông & Sấm chớp phân nhánh
-void effectWeatherLive(uint32_t durationMs = 60000);     // Mode 15: theo Weather ID + Giờ Ngày/Đêm
+// Mode 12: Đóa hồng hé nở (Blooming Rose of Love - Hoa hồng tình yêu nở rộ)
+void effectBloomingRose(uint32_t durationMs = 60000);
+
+// ============================================================================
+// CÁC CHẾ ĐỘ THỜI TIẾT SỐNG ĐỘNG 360° (WEATHER SIMULATION MODES)
+// ============================================================================
+// Mode 14: Nắng đẹp & bầu trời 360° (Clear Sky & Sunbeams / Moon & Stars)
+void effectWeatherClearSky(uint32_t durationMs = 60000);
+
+// Mode 15: Mưa rơi & vũng nước bắn sóng 360° (Rain & Puddle Ripples)
+void effectWeatherRain(uint32_t durationMs = 60000);
+
+// Mode 16: Mây trôi đa tầng 360° (Volumetric Clouds)
+void effectWeatherCloudy(uint32_t durationMs = 60000);
+
+// Mode 17: Giông bão sấm chớp 360° (Thunderstorm & Lightning)
+void effectWeatherStorm(uint32_t durationMs = 60000);
+
+// Chạy animation thời tiết tương ứng theo currentWeatherId (cho Mode 0 tuần hoàn)
+void effectWeatherLive(uint32_t durationMs = 60000);

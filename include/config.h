@@ -62,31 +62,31 @@
 // ============================================================================
 // 5. CẤU HÌNH DANH SÁCH CHẾ ĐỘ HIỂN THỊ (TUYỂN CHỌN TINH GỌN 10 CHẾ ĐỘ)
 // ============================================================================
-// Mode 0: Tự động chạy tuần hoàn 5 mode đỉnh cao + nhịp thở ban đêm (Auto-Cycle)
-// Mode 1: Đèn dung nham 3D Noise (Lava Noise - MẶC ĐỊNH ĐÈN TRANG TRÍ)
-// Mode 2: Đèn viền 4 cạnh góc hộp (Edge Light - Tối giản kiểu thiết bị cao cấp)
-// Mode 3: Sóng nhịp 4 mặt hộp (Face Wave - Đậm màu, chuyển sắc mượt khi xoay)
-// Mode 4: Đèn nghiêng & lắc bừng sáng (Tilt Glow MPU - Tương tác cảm biến)
-// Mode 5: Nước chảy & sóng xô lệch (Water Physics MPU - Showpiece vật lý nước)
-// Mode 6: Nhịp thở ban đêm (Night Breathing - Đèn ngủ êm dịu, ít chói)
-// Mode 7: Dải cực quang Bắc Cực (Aurora Flow - Chế độ dự bị)
-// Mode 8: DÒ HƯỚNG ĐI DÂY LED 0 -> 255 (Calibration Test - Công cụ Debug)
+// Mode 0: Tự động đổi cảnh Lãng Mạn (Romantic Cycle)
+// Mode 1: Nhịp đập trái tim (Heartbeat Pulse - MẶC ĐỊNH ĐÈN LÃNG MẠN)
+// Mode 2: Pha Lê Thạch Anh Tím (Amethyst Crystal Dream - Cột đá quý lung linh 360°)
+// Mode 3: Ánh nến hẹn hò lung linh (Candlelight Romance - Ấm cúng hai người)
+// Mode 4: Cử chỉ yêu thương MPU (Love Tilt & Caress - Ánh sáng âu yếm)
+// Mode 5: Lửa ấm đêm đông (Cozy Fireplace Romance - Lò sưởi ấm cúng 360°)
+// Mode 6: Biển Hoa Oải Hương Tím (Lavender Twilight Breeze - Cánh đồng tím hoàng hôn)
+// Mode 7: Cực quang tình nhân (Lover's Aurora - Huyền ảo tím & hồng)
+// Mode 8: Bầu trời ngàn sao hẹn ước (Starry Night Romance - Sao băng ước nguyện)
 // Mode 9: Tắt đèn (Standby / Off)
-// Mode 10: Màu tĩnh tùy chọn theo App (Static Color)
-// Mode 11: Hiển thị 4 ô tùy biến độc lập (4-Slot Custom Bitmap Display)
-// Mode 12: Đồng hồ để bàn 360° kỹ thuật số & thời tiết (Desk Clock 360°)
-// Mode 13: Nhịp đập trái tim (Heartbeat Pulse - Tình yêu lãng mạn)
-// Mode 14: Sóng tình yêu lan tỏa (Love Ripple - Dreamy romantic ripple)
-// Mode 15: Thời tiết sống động 360° theo giờ Ngày/Đêm (Live Weather Scene)
-#define DEFAULT_MODE          1      // Khởi động mặc định vào Mode 1: Lava Noise
-#define TOTAL_MODES           16     // Mode 0..15 (Mode 15: Live Weather 360° Ngày/Đêm)
+// Mode 10: Màu tĩnh lãng mạn tùy chọn theo App (Romantic Mood Color)
+// Mode 11: 4 Khung hình kỷ niệm tình yêu (4-Slot Love Memories)
+// Mode 12: Đóa hồng hé nở (Blooming Rose of Love - Hoa hồng tình yêu nở rộ)
+// Mode 13: Chạy chữ 360° lãng mạn (Romantic Cylinder Marquee)
+// Mode 14: Nắng đẹp & bầu trời 360° (Clear Sky & Sunbeams / Moon & Stars)
+// Mode 15: Mưa rơi & vũng nước bắn sóng 360° (Rain & Puddle Ripples)
+// Mode 16: Mây trôi đa tầng 360° (Volumetric Clouds)
+// Mode 17: Giông bão sấm chớp 360° (Thunderstorm & Lightning)
+#define DEFAULT_MODE          1      // Khởi động mặc định vào Mode 1: Nhịp đập trái tim
+#define TOTAL_MODES           18     // Mode 0..17 (18 chế độ hiển thị & thời tiết 360°)
 
 // ============================================================================
 // 6. CẤU HÌNH QUẢN LÝ NGUỒN & SẠC PIN (MODULE IP2312)
 // ============================================================================
-// Mặc định false nếu cắm nguồn trực tiếp cổng Type-C của ESP32 (tránh chân GPIO 2 & 3
-// bị thả nổi thu nhiễu điện từ làm đèn nháy ngẫu nhiên màu xanh lục/cam báo sạc)
-#define ENABLE_BATTERY_MONITOR false 
+#define ENABLE_BATTERY_MONITOR true  // Bật giám sát trạng thái sạc pin
 #define PIN_VBUS              2      // Tuyến phát hiện cắm nguồn 5V USB (GPIO 2 - ADC1_CH2 trên ESP32-C3)
 #define PIN_CHG_STAT          3      // Tuyến phát hiện LED đỏ IP2312 (GPIO 3 - ADC1_CH3 trên ESP32-C3)
 #define CHG_STAT_ACTIVE_LOW   false  // false: Active HIGH (Đèn tắt = 0V, Đèn sáng = >700mV)
@@ -111,10 +111,11 @@
 #define BLE_NUS_TX_UUID           "6E400003-B5A3-F393-E0A9-E50E24DCCA9E" // Notify (Đèn -> App)
 
 // ============================================================================
-// 9. CẤU HÌNH TÍNH NĂNG VẬT LÝ ESP32 (POMODORO & ĐÈN PIN KHẨN CẤP)
+// 9. CẤU HÌNH TÍNH NĂNG VẬT LÝ ESP32 (ĐÈN NẰM NGANG & ĐÈN PIN KHẨN CẤP)
 // ============================================================================
-#define POMODORO_WORK_MS          (25 * 60 * 1000UL) // 25 phút đếm lùi
-#define POMODORO_BREAK_MS         (5 * 60 * 1000UL)  // 5 phút nghỉ
+#define HORIZONTAL_TILT_DEG       60.0f              // Góc nghiêng tối thiểu để nhận diện đèn xoay ngang (>= 60 độ)
+#define HORIZONTAL_UPRIGHT_DEG    30.0f              // Góc để coi là đã dựng đứng lại (<= 30 độ)
+#define HORIZONTAL_HOLD_TRIGGER_MS 350UL             // Giữ nằm ngang ổn định liên tục >= 350ms để kích hoạt ánh sáng vàng
 #define EMERGENCY_TIMEOUT_MS      60000UL            // 60 giây đèn pin khẩn cấp
 #define SHAKE_JERK_THRESHOLD      2.4f               // Ngưỡng gia tốc lắc mạnh (g)
 

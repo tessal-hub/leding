@@ -7,6 +7,7 @@ import com.esp32.ledmatrix360.ble.BleManager
 import com.esp32.ledmatrix360.data.PreferencesRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
@@ -80,7 +81,7 @@ class LampNotificationListener : NotificationListenerService() {
 
     override fun onDestroy() {
         super.onDestroy()
-        kotlinx.coroutines.cancel(serviceScope)
+        serviceScope.cancel()
     }
 
     private data class NotiFlashPattern(val r: Int, val g: Int, val b: Int, val count: Int)

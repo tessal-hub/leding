@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.esp32.ledmatrix360.model.BleConnectionState
 import com.esp32.ledmatrix360.ble.BleManager
 import com.esp32.ledmatrix360.data.PreferencesRepository
 import com.esp32.ledmatrix360.data.WeatherRepository
@@ -83,17 +85,49 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Bộ quản lý bật Bluetooth nếu bị tắt
+    private val enableBluetoothLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            bleManager.autoConnectLastDevice()
+        } else {
+            Toast.makeText(this, "Vui lòng bật Bluetooth để kết nối với đèn LED 360!", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     // Bộ quản lý xin quyền Runtime
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val allGranted = permissions.entries.all { it.value }
-        if (allGranted) {
-            bleManager.startScan()
+        val bluetoothGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            (permissions[Manifest.permission.BLUETOOTH_SCAN] == true &&
+             permissions[Manifest.permission.BLUETOOTH_CONNECT] == true)
+        } else {
+            permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        }
+
+        if (bluetoothGranted) {
+            ensureBluetoothEnabledAndScan()
             BleForegroundService.startService(this)
         } else {
-            Toast.makeText(this, "Cần cấp quyền Bluetooth và Thông báo để ứng dụng hoạt động đầy đủ!", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Cần cấp quyền Bluetooth để quét và điều khiển đèn LED Matrix 360!", Toast.LENGTH_LONG).show()
         }
+    }
+
+    private fun ensureBluetoothEnabledAndScan() {
+        val adapter = (getSystemService(BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager)?.adapter
+        if (adapter == null) {
+            Toast.makeText(this, "Thiết bị không hỗ trợ Bluetooth!", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!adapter.isEnabled) {
+            try {
+                enableBluetoothLauncher.launch(Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_ENABLE))
+            } catch (_: Exception) {}
+            return
+        }
+        bleManager.autoConnectLastDevice()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -102,19 +136,22 @@ class MainActivity : ComponentActivity() {
         bleManager = BleManager.getInstance(applicationContext)
         prefsRepository = PreferencesRepository.getInstance(applicationContext)
 
-        // 1. Tự động khởi động BLE Foreground Service & Lên lịch đồng bộ ngầm
-        try {
-            BleForegroundService.startService(this)
-            WeatherTimeWorker.schedule(this)
-        } catch (e: Exception) {
-            e.printStackTrace()
+        // 1. Kiểm tra quyền và tự động khởi động kết nối & dịch vụ nền
+        if (hasRequiredPermissions()) {
+            ensureBluetoothEnabledAndScan()
+            try {
+                BleForegroundService.startService(this)
+                WeatherTimeWorker.schedule(this)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        } else {
+            checkAndRequestPermissions()
         }
 
-        // 2. Yêu cầu quyền hệ thống nếu cần
-        checkAndRequestPermissions()
-
         setContent {
-            LampTheme {
+            val isDynamicColor by prefsRepository.dynamicColorFlow.collectAsState(initial = false)
+            LampTheme(dynamicColor = isDynamicColor) {
                 MainAppScreen(
                     bleManager = bleManager,
                     prefsRepository = prefsRepository,
@@ -123,13 +160,17 @@ class MainActivity : ComponentActivity() {
                         if (!hasRequiredPermissions()) {
                             checkAndRequestPermissions()
                         } else {
-                            if (bleManager.isConnected.value) {
+                            val adapter = (getSystemService(BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager)?.adapter
+                            if (adapter != null && !adapter.isEnabled) {
+                                ensureBluetoothEnabledAndScan()
+                            } else if (bleManager.isConnected.value) {
                                 bleManager.disconnect()
                                 Toast.makeText(this@MainActivity, "Đã ngắt kết nối với đèn LED Matrix 360", Toast.LENGTH_SHORT).show()
                             } else if (bleManager.isScanning.value) {
                                 bleManager.stopScan()
                                 Toast.makeText(this@MainActivity, "Đã dừng quét Bluetooth", Toast.LENGTH_SHORT).show()
                             } else {
+                                bleManager.clearScannedDevices()
                                 bleManager.startScan()
                                 Toast.makeText(this@MainActivity, "Đang quét tìm đèn LED Matrix 360...", Toast.LENGTH_SHORT).show()
                             }
@@ -231,6 +272,7 @@ fun MainAppScreen(
     onSyncNow: () -> Unit,
     onPickFirmwareFile: () -> Unit
 ) {
+    val connState by bleManager.connectionState.collectAsState()
     val isConnected by bleManager.isConnected.collectAsState()
     val isScanning by bleManager.isScanning.collectAsState()
     val telemetry by bleManager.telemetryState.collectAsState()
@@ -265,7 +307,10 @@ fun MainAppScreen(
                 }
                 weatherData = data
                 if (bleManager.isConnected.value) {
-                    bleManager.sendWeather(data.temp, data.weatherId)
+                    bleManager.sendWeather(data.temp, data.weatherId, switchMode = false)
+                    if (smartRoutineConfig.autoWeatherSync) {
+                        bleManager.setEffect(data.recommendedModeId, speed = effectSpeed)
+                    }
                     val cal = Calendar.getInstance()
                     bleManager.sendTimeSync(
                         cal.get(Calendar.HOUR_OF_DAY),
@@ -280,114 +325,180 @@ fun MainAppScreen(
         }
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+    BackHandler(enabled = currentDestination != MainDestination.STUDIO) {
+        currentDestination = MainDestination.STUDIO
+    }
+
+    val isDynamicColor by prefsRepository.dynamicColorFlow.collectAsState(initial = false)
+
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val isExpanded = maxWidth >= 600.dp
+
+        Row(modifier = Modifier.fillMaxSize()) {
+            if (isExpanded) {
+                NavigationRail(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    header = {
                         Surface(
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.primaryContainer,
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier
+                                .padding(vertical = 12.dp)
+                                .size(44.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Filled.Lightbulb,
-                                    contentDescription = null,
+                                    contentDescription = "LED 360",
                                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
                         }
-                        Text(
-                            text = "LED Lamp 360°",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                    }
+                ) {
+                    MainDestination.entries.forEach { destination ->
+                        val isSelected = currentDestination == destination
+                        NavigationRailItem(
+                            selected = isSelected,
+                            onClick = { currentDestination = destination },
+                            icon = {
+                                Icon(
+                                    imageVector = if (isSelected) destination.selectedIcon else destination.unselectedIcon,
+                                    contentDescription = destination.title
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = destination.title,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            },
+                            colors = NavigationRailItemDefaults.colors(
+                                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         )
                     }
-                },
-                actions = {
-                    // M3 Connection Status Chip
-                    FilterChip(
-                        selected = isConnected,
-                        onClick = onRequestPermissions,
-                        label = {
-                            Text(
-                                text = if (isConnected) "Đã kết nối" else (if (isScanning) "Đang tìm..." else "Kết nối"),
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                        },
-                        leadingIcon = {
-                            if (isScanning) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(12.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (isConnected) GreenJade else MaterialTheme.colorScheme.outline
+                }
+            }
+
+            Scaffold(
+                modifier = Modifier.weight(1f),
+                snackbarHost = { SnackbarHost(snackbarHostState) },
+                topBar = {
+                    CenterAlignedTopAppBar(
+                        title = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Lightbulb,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.size(18.dp)
                                         )
+                                    }
+                                }
+                                Text(
+                                    text = "LED Lamp 360°",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         },
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        },
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                tonalElevation = 3.dp
-            ) {
-                MainDestination.entries.forEach { destination ->
-                    val isSelected = currentDestination == destination
-                    NavigationBarItem(
-                        selected = isSelected,
-                        onClick = { currentDestination = destination },
-                        icon = {
-                            Icon(
-                                imageVector = if (isSelected) destination.selectedIcon else destination.unselectedIcon,
-                                contentDescription = destination.title
+                        actions = {
+                            // M3 Connection Status Chip
+                            FilterChip(
+                                selected = isConnected,
+                                onClick = onRequestPermissions,
+                                label = {
+                                    Text(
+                                        text = if (isConnected) "Đã kết nối" else (if (isScanning || connState != BleConnectionState.DISCONNECTED) connState.displayName else "Kết nối"),
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                },
+                                leadingIcon = {
+                                    if (isScanning || connState == BleConnectionState.CONNECTING || connState == BleConnectionState.NEGOTIATING_MTU || connState == BleConnectionState.DISCOVERING_SERVICES || connState == BleConnectionState.ENABLING_NOTIFICATIONS) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(12.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(
+                                                    if (isConnected) GreenJade else MaterialTheme.colorScheme.outline
+                                                )
+                                        )
+                                    }
+                                },
+                                modifier = Modifier
+                                    .padding(end = 8.dp)
+                                    .defaultMinSize(minHeight = 48.dp)
                             )
                         },
-                        label = {
-                            Text(
-                                text = destination.title,
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            titleContentColor = MaterialTheme.colorScheme.onSurface
                         )
                     )
+                },
+                bottomBar = {
+                    if (!isExpanded) {
+                        NavigationBar(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            tonalElevation = 3.dp
+                        ) {
+                            MainDestination.entries.forEach { destination ->
+                                val isSelected = currentDestination == destination
+                                NavigationBarItem(
+                                    selected = isSelected,
+                                    onClick = { currentDestination = destination },
+                                    icon = {
+                                        Icon(
+                                            imageVector = if (isSelected) destination.selectedIcon else destination.unselectedIcon,
+                                            contentDescription = destination.title
+                                        )
+                                    },
+                                    label = {
+                                        Text(
+                                            text = destination.title,
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
+                                    },
+                                    colors = NavigationBarItemDefaults.colors(
+                                        indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                        selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
+                        }
+                    }
                 }
-            }
-        }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .background(MaterialTheme.colorScheme.surface)
-        ) {
+            ) { paddingValues ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .background(MaterialTheme.colorScheme.surface)
+                ) {
             Crossfade(
                 targetState = currentDestination,
                 label = "DestinationCrossfade"
@@ -411,7 +522,7 @@ fun MainAppScreen(
                             onPowerToggle = {
                                 if (telemetry.mode == 9) {
                                     bleManager.setEffect(1, speed = effectSpeed, brightness = telemetry.brightness)
-                                    showSnack("Đã bật đèn (Lửa cuộn 360°)")
+                                    showSnack("Đã bật đèn (Nhịp Đập Trái Tim)")
                                 } else {
                                     bleManager.setEffect(9)
                                     showSnack("Đã chuyển sang chế độ chờ")
@@ -436,12 +547,8 @@ fun MainAppScreen(
                                     showSnackConnect("Đã chọn màu RGB($r, $g, $b) — chưa kết nối đèn")
                                 }
                             },
-                            onSendMarqueeText = { text, r, g, b ->
-                                if (r != null && g != null && b != null) {
-                                    bleManager.sendCommand("text $r $g $b $text")
-                                } else {
-                                    bleManager.sendMarqueeText(text)
-                                }
+                            onSendMarqueeText = { text, r, g, b, speed ->
+                                bleManager.sendMarqueeText(text, r, g, b, speed)
                                 scope.launch { prefsRepository.saveLastMarquee(text) }
                                 if (isConnected) showSnack("Đã gửi chữ lên đèn: $text")
                                 else showSnackConnect("Đã lưu chữ: $text — chưa kết nối đèn")
@@ -490,13 +597,32 @@ fun MainAppScreen(
                                     }
                                     weatherData = data
                                     if (bleManager.isConnected.value) {
-                                        bleManager.sendWeather(data.temp, data.weatherId)
+                                        bleManager.sendWeather(data.temp, data.weatherId, switchMode = false)
+                                        if (smartRoutineConfig.autoWeatherSync) {
+                                            bleManager.setEffect(data.recommendedModeId, speed = effectSpeed)
+                                        }
                                     }
                                     showSnack("Đã cập nhật: ${data.cityName} ${data.temp}°C (${data.weatherName})")
                                 }
                             },
                             onPreviewModeSelect = { modeId ->
                                 bleManager.setEffect(modeId, speed = effectSpeed)
+                            },
+                            onTriggerWeatherAnimation = { temp, weatherId, modeId ->
+                                if (bleManager.isConnected.value) {
+                                    bleManager.sendWeather(temp, weatherId, switchMode = false)
+                                    bleManager.setEffect(modeId, speed = effectSpeed)
+                                } else {
+                                    bleManager.setEffect(modeId, speed = effectSpeed)
+                                }
+                                val wName = when (weatherId) {
+                                    1 -> "Nắng đẹp (Mode 14)"
+                                    2 -> "Mây trời (Mode 16)"
+                                    3 -> "Mưa rơi (Mode 15)"
+                                    4 -> "Giông bão (Mode 17)"
+                                    else -> "Thời tiết"
+                                }
+                                showSnack("Đang chạy animation: $wName")
                             },
                             onTriggerSunriseDemo = {
                                 scope.launch {
@@ -552,10 +678,15 @@ fun MainAppScreen(
                                 bleManager.sendNotificationInterrupt(r, g, b, count = count, delay10ms = 15)
                             },
                             onOpenNotificationSettings = onOpenNotificationSettings,
-                            onTriggerPomodoro = { bleManager.triggerPomodoro() },
+                            onTriggerWarmLight = { bleManager.triggerWarmLight() },
+                            onTriggerPomodoro = { bleManager.triggerWarmLight() },
                             onSyncNow = onSyncNow,
                             onRequestBatteryOptimization = onRequestBatteryOptimization,
                             onPickFirmwareFile = onPickFirmwareFile,
+                            isDynamicColor = isDynamicColor,
+                            onToggleDynamicColor = { enabled ->
+                                scope.launch { prefsRepository.saveDynamicColor(enabled) }
+                            },
                             onShowMessage = { showSnack(it) },
                             onShowMessageConnect = { showSnackConnect(it) }
                         )
@@ -564,4 +695,6 @@ fun MainAppScreen(
             }
         }
     }
+}
+}
 }

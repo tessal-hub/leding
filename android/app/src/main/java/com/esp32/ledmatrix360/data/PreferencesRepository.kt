@@ -22,6 +22,10 @@ class PreferencesRepository(private val context: Context) {
         private val KEY_LAST_MARQUEE   = stringPreferencesKey("last_marquee_text")
         private val KEY_ROUTINES_CONFIG = stringPreferencesKey("smart_routines_config")
         private val KEY_EFFECT_SPEED   = intPreferencesKey("effect_speed")
+        private val KEY_LAST_DEVICE_ADDRESS = stringPreferencesKey("last_device_address")
+        private val KEY_LAST_DEVICE_NAME = stringPreferencesKey("last_device_name")
+        private val KEY_AUTO_CONNECT = booleanPreferencesKey("auto_connect_enabled")
+        private val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color_enabled")
 
         @Volatile
         private var INSTANCE: PreferencesRepository? = null
@@ -151,6 +155,42 @@ class PreferencesRepository(private val context: Context) {
     suspend fun saveEffectSpeed(speed: Int) {
         context.dataStore.edit { prefs ->
             prefs[KEY_EFFECT_SPEED] = speed
+        }
+    }
+
+    val lastDeviceAddressFlow: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_LAST_DEVICE_ADDRESS]
+    }
+
+    val lastDeviceNameFlow: Flow<String?> = context.dataStore.data.map { prefs ->
+        val saved = prefs[KEY_LAST_DEVICE_NAME]
+        if (saved == null || saved == "LED-360" || saved == LampConstants.SHORT_NAME) LampConstants.DEVICE_NAME else saved
+    }
+
+    suspend fun saveLastDevice(address: String, name: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_LAST_DEVICE_ADDRESS] = address
+            prefs[KEY_LAST_DEVICE_NAME] = name
+        }
+    }
+
+    val autoConnectFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_AUTO_CONNECT] ?: true
+    }
+
+    suspend fun saveAutoConnect(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_AUTO_CONNECT] = enabled
+        }
+    }
+
+    val dynamicColorFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_DYNAMIC_COLOR] ?: false
+    }
+
+    suspend fun saveDynamicColor(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_DYNAMIC_COLOR] = enabled
         }
     }
 }

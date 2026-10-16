@@ -31,7 +31,9 @@
         tools:targetApi="s" />
 
     <!-- Foreground Service & Connected Device (Android 14+) -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE"
+        tools:targetApi="34" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
@@ -43,15 +45,18 @@
 
     <application
         android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
-        android:label="LED 360 Lamp"
-        android:roundIcon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@android:style/Theme.Material.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -64,12 +69,13 @@
             android:name=".service.BleForegroundService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
+            android:foregroundServiceType="connectedDevice"
+            tools:targetApi="q" />
 
         <!-- Notification Listener Service capturing app notifications -->
         <service
             android:name=".service.LampNotificationListener"
-            android:label="LED 360 Notification Bridge"
+            android:label="@string/notification_listener_label"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">
             <intent-filter>
@@ -92,7 +98,7 @@
         <receiver
             android:name=".widget.LampWidgetProvider"
             android:exported="true"
-            android:label="LED 360 Control Widget">
+            android:label="@string/widget_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>

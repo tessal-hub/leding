@@ -55,6 +55,7 @@ static inline void bleUnlock() {
 class BleServerCallbacks: public NimBLEServerCallbacks {
   void onConnect(NimBLEServer* pServer, ble_gap_conn_desc* desc) override {
     deviceConnected = true;
+    NimBLEDevice::stopAdvertising(); // Dừng phát quảng bá khi đã kết nối để giảm tải radio và bảo vệ ngắt RMT
     dbgLog(TAG_BLE, "Điện thoại đã kết nối Bluetooth BLE thành công! (MAC: %s)",
            desc ? NimBLEAddress(desc->peer_ota_addr).toString().c_str() : "unknown");
   }
@@ -110,9 +111,9 @@ void initBleService() {
 
   if (bleMutex == NULL) bleMutex = xSemaphoreCreateMutex();
 
-  // 1. Khởi tạo BLE Device & Tăng công suất phát sóng tối đa (+9dBm)
+  // 1. Khởi tạo BLE Device & Đặt công suất phát sóng hợp lý (+3dBm)
   NimBLEDevice::init(BLE_DEVICE_NAME);
-  NimBLEDevice::setPower(ESP_PWR_LVL_P9); // Công suất phát tối đa +9dBm (xuyên vỏ hộp)
+  NimBLEDevice::setPower(ESP_PWR_LVL_P3); // Đặt +3dBm thay vì +9dBm để triệt tiêu sụt áp và nhiễu sóng RF vào chân DIN
   NimBLEDevice::setMTU(517);              // Hỗ trợ trao đổi gói tin lớn đến 512 bytes
 
   // 2. Cấu hình bảo mật & ghép đôi (Hỗ trợ Ghép đôi "Just Works" tương thích tối đa với mọi máy)
@@ -149,22 +150,25 @@ void initBleService() {
   NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
 
   // Gói quảng bá chính (Primary Advertisement Packet - tối đa 31 bytes):
-  // Flags (3B) + 128-bit Service UUID (18B) + Tên "LED-360" (9B) = 30 bytes <= 31 bytes.
-  // QUAN TRỌNG CHO WINDOWS: Windows WinRT BLE API chỉ lọc Service UUID trong gói quảng bá chính!
+  // Flags (3B) + 128-bit Service UUID (18B) = 21 bytes. Còn lại 10 bytes cho tên (tối đa 8 ký tự).
   NimBLEAdvertisementData advData;
   advData.setFlags(0x06); // General Discoverable Mode + BR/EDR Not Supported
   advData.setCompleteServices(NimBLEUUID(BLE_NUS_SERVICE_UUID));
-  advData.setName("LED-360");
+  if (strlen(BLE_DEVICE_NAME) <= 8) {
+    advData.setName(BLE_DEVICE_NAME);
+  } else {
+    advData.setName("LED-360"); // Tên rút gọn vừa khít 31 bytes chuẩn Legacy Adv
+  }
   pAdvertising->setAdvertisementData(advData);
 
-  // Gói phản hồi (Scan Response): Chứa TÊN ĐẦY ĐỦ "LED-MATRIX-360"
+  // Gói phản hồi quét (Scan Response): Chứa TÊN ĐẦY ĐỦ "LED-MATRIX-360" chính xác từ config.h
   NimBLEAdvertisementData scanData;
   scanData.setName(BLE_DEVICE_NAME);
   pAdvertising->setScanResponseData(scanData);
 
   pAdvertising->setScanResponse(true);
-  pAdvertising->setMinInterval(48);  // 48 * 0.625ms = 30ms (Quét cực nhạy, tức thì)
-  pAdvertising->setMaxInterval(80);  // 80 * 0.625ms = 50ms
+  pAdvertising->setMinInterval(320); // 320 * 0.625ms = 200ms (Giảm mật độ ngắt radio BLE, bảo vệ luồng xung RMT)
+  pAdvertising->setMaxInterval(640); // 640 * 0.625ms = 400ms
 
   bool started = pAdvertising->start();
   if (!started) {
@@ -173,7 +177,7 @@ void initBleService() {
   }
 
   if (started) {
-    dbgLog(TAG_BLE, "BLE đã sẵn sàng! UUID Service: %s (TxPower: +9dBm)", BLE_NUS_SERVICE_UUID);
+    dbgLog(TAG_BLE, "BLE đã sẵn sàng! UUID Service: %s (TxPower: +3dBm)", BLE_NUS_SERVICE_UUID);
     dbgLog(TAG_BLE, "Thiết bị '%s': ĐANG PHÁT SÓNG QUẢNG BÁ (Sẵn sàng kết nối).", BLE_DEVICE_NAME);
   } else {
     dbgLog(TAG_BLE, "CẢNH BÁO: pAdvertising->start() thất bại!");
@@ -296,14 +300,14 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
         }
         break;
       }
-      case 0x04: { // Weather Data: [0x04, Temp_Signed, Weather_ID, Optional_ForceShow]
+      case 0x04: { // Weather Data: [0x04, Temp_Signed, Weather_ID, Optional_SwitchMode]
         if (raw.length() >= 3) {
           int8_t temp = (int8_t)raw[1];
           uint8_t wId = (uint8_t)raw[2];
-          bool forceShow = (raw.length() >= 4 && (uint8_t)raw[3] == 1);
-          dbgLog(TAG_BLE, "Nhận Frame 0x04 Thời Tiết: %d°C | ID: %d | ForceShow: %d", temp, wId, forceShow);
-          triggerWeatherUpdate(temp, wId, forceShow);
-          if (forceShow || currentMode == 15) {
+          bool switchMode = (raw.length() >= 4 && (uint8_t)raw[3] == 1);
+          dbgLog(TAG_BLE, "Nhận Frame 0x04 Thời Tiết: %d°C | ID: %d | SwitchMode: %d", temp, wId, switchMode);
+          triggerWeatherUpdate(temp, wId, switchMode);
+          if (switchMode) {
             needInterrupt = true;
           }
         }
@@ -331,7 +335,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
             setSlotBitmap1Bit(slot, r, g, b, rows);
             currentMode = 11;
             renderFourSlotsToMatrix();
-            strip.show();
+            showDisplay();
             markSlotsDirty();
             dbgLog(TAG_BLE, "Binary 0x06: Cập nhật Ô %d (Mặt %d) Bitmap 8x8 RGB(%d, %d, %d)",
                    slot + 1, slot + 1, r, g, b);
@@ -349,7 +353,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
             setSlotPixelsRGB565(slot, chunkIdx, (const uint8_t*)raw.data() + 3, raw.length() - 3);
             currentMode = 11;
             renderFourSlotsToMatrix();
-            strip.show();
+            showDisplay();
             markSlotsDirty();
             dbgLog(TAG_BLE, "Binary 0x07: Nạp Chunk RGB %d cho Ô %d", chunkIdx, slot + 1);
             needInterrupt = true;
@@ -473,7 +477,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
       int b = jsonIntAfterKey(cmd, posB);
       currentBrightness = constrain((uint8_t)b, (uint8_t)5, (uint8_t)255);
       strip.setBrightness(toHardwareBrightness(currentBrightness));
-      strip.show();
+      showDisplay();
       markSettingsChanged();
     }
 
@@ -503,7 +507,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
       }
     }
 
-    // e. Chạy chữ: "t": "nội dung"
+    // e. Chạy chữ: "t": "nội dung" hoặc "text": "nội dung" (hỗ trợ kèm r, g, b, speed)
     size_t posT = cmd.find("\"t\":");
     if (posT == std::string::npos) posT = cmd.find("\"text\":");
     if (posT != std::string::npos) {
@@ -512,8 +516,28 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
         size_t secondQuote = cmd.find('\"', firstQuote + 1);
         if (secondQuote != std::string::npos) {
           std::string textStr = cmd.substr(firstQuote + 1, secondQuote - firstQuote - 1);
-          char buf[128];
-          snprintf(buf, sizeof(buf), "text %s", textStr.c_str());
+          int r = -1, g = -1, b = -1, spd = 125;
+          size_t posR = cmd.find("\"r\":");
+          size_t posG = cmd.find("\"g\":");
+          size_t posB = cmd.find("\"b\":");
+          size_t posS = cmd.find("\"speed\":");
+          if (posS == std::string::npos) posS = cmd.find("\"s\":");
+
+          if (posR != std::string::npos && posG != std::string::npos && posB != std::string::npos) {
+            r = jsonIntAfterKey(cmd, posR);
+            g = jsonIntAfterKey(cmd, posG);
+            b = jsonIntAfterKey(cmd, posB);
+          }
+          if (posS != std::string::npos) {
+            spd = jsonIntAfterKey(cmd, posS);
+          }
+
+          char buf[160];
+          if (r >= 0 && g >= 0 && b >= 0) {
+            snprintf(buf, sizeof(buf), "text %d %d %d %d %s", r, g, b, spd, textStr.c_str());
+          } else {
+            snprintf(buf, sizeof(buf), "text %s", textStr.c_str());
+          }
           needInterrupt |= executeCliCommand(buf);
         }
       }
@@ -550,7 +574,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
               applySlotPreset((uint8_t)s, pName.c_str());
               currentMode = 11;
               renderFourSlotsToMatrix();
-              strip.show();
+              showDisplay();
               markSlotsDirty();
               needInterrupt = true;
             }
@@ -560,7 +584,7 @@ static bool parseAndExecuteBleCommand(const std::string& raw) {
           clearSlot((uint8_t)s);
           currentMode = 11;
           renderFourSlotsToMatrix();
-          strip.show();
+          showDisplay();
           markSlotsDirty();
           needInterrupt = true;
         }

@@ -69,13 +69,14 @@ class BleForegroundService : Service() {
         serviceScope.launch {
             bleManager.isConnected.collectLatest { connected ->
                 if (connected) {
-                    updateNotification("CubeLamp: Đã kết nối với đèn LED 360")
+                    val name = bleManager.connectedDeviceName.value
+                    updateNotification("LED 360: Đã kết nối với $name")
                 } else {
-                    updateNotification("CubeLamp: Đang tìm kiếm đèn...")
-                    // Tự động quét lại sau khi ngắt kết nối
+                    updateNotification("LED 360: Đang tìm kiếm đèn...")
+                    // Tự động quét lại sau khi ngắt kết nối nếu bật auto-connect
                     delay(3000)
-                    if (!bleManager.isConnected.value && !bleManager.isScanning.value) {
-                        bleManager.startScan()
+                    if (!bleManager.isConnected.value && !bleManager.isScanning.value && bleManager.isAutoConnectEnabled.value) {
+                        bleManager.autoConnectLastDevice()
                     }
                 }
             }
@@ -135,7 +136,7 @@ class BleForegroundService : Service() {
 
         // Tự động kết nối nếu chưa kết nối
         if (!bleManager.isConnected.value) {
-            bleManager.startScan()
+            bleManager.autoConnectLastDevice()
         }
     }
 

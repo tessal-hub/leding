@@ -3,7 +3,7 @@
     android:id="@+id/widget_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#121826"
+    android:background="@color/bg_dark"
     android:orientation="horizontal"
     android:padding="12dp"
     android:gravity="center_vertical">
@@ -11,6 +11,7 @@
     <ImageView
         android:layout_width="32dp"
         android:layout_height="32dp"
+        android:contentDescription="@null"
         android:src="@drawable/ic_launcher_foreground" />
 
     <LinearLayout
@@ -24,7 +25,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="LED 360 Lamp"
+            android:text="@string/app_name"
             android:textColor="#FFFFFF"
             android:textStyle="bold"
             android:textSize="14sp" />
@@ -32,7 +33,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Chạm để Mở App"
+            android:text="@string/widget_tap_to_open"
             android:textColor="#38BDF8"
             android:textSize="11sp" />
     </LinearLayout>
@@ -41,8 +42,8 @@
         android:id="@+id/btn_widget_power"
         android:layout_width="40dp"
         android:layout_height="40dp"
-        android:background="#00F2FE"
-        android:contentDescription="Bật/Tắt Nguồn"
+        android:background="@color/cyan_neon"
+        android:contentDescription="@string/widget_power_toggle"
         android:src="@android:drawable/ic_lock_power_off" />
 
 </LinearLayout>

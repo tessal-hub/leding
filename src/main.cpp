@@ -84,11 +84,11 @@ void loop() {
     isEmergencyActive = false;
     return;
   }
-  if (pendingPomodoroTrigger || (!isPomodoroActive && checkPomodoroTrigger())) {
-    pendingPomodoroTrigger = false;
-    isPomodoroActive = true;
-    effectPomodoro();
-    isPomodoroActive = false;
+  if (pendingHorizontalTrigger || (!isHorizontalActive && checkHorizontalTrigger())) {
+    pendingHorizontalTrigger = false;
+    isHorizontalActive = true;
+    effectHorizontalWarmLight();
+    isHorizontalActive = false;
     return;
   }
 
@@ -129,125 +129,141 @@ void loop() {
     return;
   }
 
-  // 2. Chế độ 0: Tự động chuyển đổi các Mode tuyển chọn (Auto-Cycle Curated)
+  // 2. Chế độ 0: Tự động chuyển đổi các Mode lãng mạn tuyển chọn (Romantic Cycle)
   if (currentMode == 0) {
-    // 1. Lava Noise (Đèn trang trí không chán)
-    effectLavaNoise(14000);
+    // 1. Nhịp đập trái tim lãng mạn (Mở đầu bừng sáng yêu thương)
+    effectHeartbeatPulse(14000);
     if (currentMode != 0) return;
     fadeTransition(240);
 
-    // 2. Edge Light (Đèn viền tối giản cao cấp)
-    effectEdgeLight(12000);
+    // 2. Pha Lê Thạch Anh Tím (Cột đá quý lung linh 360°)
+    effectAmethystCrystal(12000);
     if (currentMode != 0) return;
     fadeTransition(240);
 
-    // 3. Face Wave (Sóng nhịp chuyển sắc 4 mặt hộp)
-    effectFaceWave(12000);
+    // 3. Ánh nến hẹn hò lung linh (Ấm cúng, thân mật)
+    effectCandlelight(12000);
     if (currentMode != 0) return;
     fadeTransition(240);
 
-    // 4. Tilt Glow MPU (Tương tác bám góc nghiêng & lắc bừng sáng)
+    // 4. Cử chỉ yêu thương MPU (Tương tác bám góc nghiêng âu yếm)
     effectTiltGlow(12000);
     if (currentMode != 0) return;
     fadeTransition(240);
 
-    // 5. Water Physics MPU (Showpiece vật lý nước & giọt bắn)
-    effectWaterPhysics(12000);
+    // 5. Lửa ấm đêm đông (Lò sưởi ấm cúng hẹn hò)
+    effectCozyFireplace(12000);
     if (currentMode != 0) return;
     fadeTransition(240);
 
-    // 6. Night Breathing (Đèn ngủ êm dịu thư giãn)
-    effectBreathingGradient(10000);
+    // 6. Biển hoa oải hương tím (Cánh đồng tím hoàng hôn)
+    effectLavenderBreeze(12000);
     if (currentMode != 0) return;
     fadeTransition(240);
 
-    // 7. Aurora Flow (Cực quang uốn lượn tím - cyan)
+    // 7. Cực quang tình nhân (Huyền ảo tím & hồng mộng mơ)
     effectAurora(10000);
     if (currentMode != 0) return;
     fadeTransition(240);
 
-    // 8. Heartbeat Pulse (Nhịp đập trái tim lãng mạn)
-    effectHeartbeatPulse(10000);
+    // 8. Bầu trời ngàn sao hẹn ước (Lãng mạn & sao băng ước nguyện)
+    effectStarryNight(12000);
     if (currentMode != 0) return;
     fadeTransition(240);
 
-    // 9. Love Ripple (Sóng tình yêu mơ mộng)
-    effectLoveRipple(10000);
+    // 12. Đóa hồng hé nở (Hoa hồng bung nở tình yêu)
+    effectBloomingRose(12000);
+    if (currentMode != 0) return;
+    fadeTransition(240);
+
+    // 14..17. Thời tiết sống động 360° theo thời gian thực (Live Weather Animation)
+    effectWeatherLive(12000);
     if (currentMode != 0) return;
     fadeTransition(240);
 
     return;
   }
 
-  // 3. Các chế độ cố định (Mode 1 -> 14): Chạy liên tục cho đến khi bấm chuyển Mode
+  // 3. Các chế độ cố định (Mode 1 -> 12): Chạy liên tục cho đến khi bấm chuyển Mode
   switch (currentMode) {
     case 1:
-      // Mode 1: Lava Noise - Đèn trang trí mặc định
-      effectLavaNoise(60000);
+      // Mode 1: Nhịp đập trái tim (Heartbeat Pulse - MẶC ĐỊNH)
+      effectHeartbeatPulse(60000);
       break;
 
     case 2:
-      // Mode 2: Edge Light - Đèn viền 4 cạnh tối giản
-      effectEdgeLight(60000);
+      // Mode 2: Pha Lê Thạch Anh Tím (Amethyst Crystal Dream)
+      effectAmethystCrystal(60000);
       break;
 
     case 3:
-      // Mode 3: Face Wave - Sóng nhịp 4 mặt hộp
-      effectFaceWave(60000);
+      // Mode 3: Ánh nến hẹn hò lung linh (Candlelight Romance)
+      effectCandlelight(60000);
       break;
 
     case 4:
-      // Mode 4: Tilt Glow MPU - Tương tác nghiêng & lắc
+      // Mode 4: Cử chỉ yêu thương MPU (Love Tilt & Caress)
       effectTiltGlow(60000);
       break;
 
     case 5:
-      // Mode 5: Water Physics MPU - Showpiece vật lý nước
-      effectWaterPhysics(60000);
+      // Mode 5: Lửa ấm đêm đông (Cozy Fireplace Romance)
+      effectCozyFireplace(60000);
       break;
 
     case 6:
-      // Mode 6: Night Breathing - Chế độ ban đêm êm dịu
-      effectBreathingGradient(60000);
+      // Mode 6: Biển hoa oải hương tím (Lavender Twilight Breeze)
+      effectLavenderBreeze(60000);
       break;
 
     case 7:
-      // Mode 7: Aurora Flow - Dự bị cực quang Bắc Cực
+      // Mode 7: Cực quang tình nhân (Lover's Aurora)
       effectAurora(60000);
       break;
 
     case 8:
-      // Mode 8: Dò hướng đi dây LED 0 -> 255 (Debug Tool riêng, tách khỏi Auto)
-      effectLedOrderTest(35);
+      // Mode 8: Bầu trời ngàn sao hẹn ước (Starry Night Romance)
+      effectStarryNight(60000);
       break;
+
     case 10:
-      // Mode 10: Màu tĩnh tùy chọn theo App (Static Color)
-      effectStaticColor();
+      // Mode 10: Màu tĩnh lãng mạn tùy chọn theo App (Romantic Mood Color - phản ứng MPU)
+      effectStaticColor(60000);
       break;
 
     case 11:
-      // Mode 11: Hiển thị 4 ô Bitmap tùy biến độc lập
+      // Mode 11: 4 Khung hình kỷ niệm tình yêu (4-Slot Love Memories)
       effectFourSlotsCustom(60000);
       break;
 
     case 12:
-      // Mode 12: Đồng hồ để bàn 360 độ kỹ thuật số & thời tiết (Desk Clock)
-      effectDeskClock(60000);
+      // Mode 12: Đóa hồng hé nở (Blooming Rose of Love)
+      effectBloomingRose(60000);
       break;
 
     case 13:
-      // Mode 13: Heartbeat Pulse - Nhịp đập trái tim lãng mạn
-      effectHeartbeatPulse(60000);
+      // Mode 13: Chạy chữ 360° lãng mạn liên tục quanh thân đèn (Romantic Cylinder Marquee)
+      effectMarqueeMode(60000);
       break;
 
     case 14:
-      // Mode 14: Love Ripple - Sóng tình yêu lan tỏa
-      effectLoveRipple(60000);
+      // Mode 14: Thời tiết - Nắng đẹp & tia nắng xoay 360° (Clear Sky & Sunbeams)
+      effectWeatherClearSky(60000);
       break;
 
     case 15:
-      // Mode 15: Live Weather 360° - Thời tiết sống động theo giờ Ngày/Đêm
-      effectWeatherLive(60000);
+      // Mode 15: Thời tiết - Mưa rơi & vũng nước bắn sóng 360° (Rain & Puddle Ripples)
+      effectWeatherRain(60000);
+      break;
+
+    case 16:
+      // Mode 16: Thời tiết - Mây trôi đa tầng 360° (Volumetric Clouds)
+      effectWeatherCloudy(60000);
+      break;
+
+    case 17:
+      // Mode 17: Thời tiết - Giông bão sấm chớp 360° (Thunderstorm & Lightning)
+      effectWeatherStorm(60000);
       break;
 
   }

@@ -47,15 +47,82 @@ static void precomputeXyTable() {
   xyTableReady = true;
 }
 
+#include "driver/rmt.h"
+
+// RMT Channel 0 dành riêng vĩnh viễn cho 256 bóng WS2812B (không install/uninstall từng frame)
+#define WS2812_RMT_CHANNEL RMT_CHANNEL_0
+
+// Bảng xung chuẩn 800kHz cho WS2812B tại clock 40MHz (25ns/tick):
+// Bit 0: T0H = 350ns (14 ticks), T0L = 900ns (36 ticks) -> Tổng 1250ns
+// Bit 1: T1H = 900ns (36 ticks), T1L = 350ns (14 ticks) -> Tổng 1250ns
+static const rmt_item32_t ws2812_bit0 = {{{ 14, 1, 36, 0 }}};
+static const rmt_item32_t ws2812_bit1 = {{{ 36, 1, 14, 0 }}};
+
+static void IRAM_ATTR ws2812_rmt_adapter(const void *src, rmt_item32_t *dest, size_t src_size,
+                                         size_t wanted_num, size_t *translated_size, size_t *item_num) {
+  if (src == NULL || dest == NULL) {
+    *translated_size = 0;
+    *item_num = 0;
+    return;
+  }
+  size_t size = 0;
+  size_t num = 0;
+  const uint8_t *psrc = (const uint8_t *)src;
+  rmt_item32_t *pdest = dest;
+  while (size < src_size && num < wanted_num) {
+    uint8_t byteVal = *psrc;
+    for (int i = 0; i < 8; i++) {
+      if (byteVal & (1 << (7 - i))) {
+        pdest->val = ws2812_bit1.val;
+      } else {
+        pdest->val = ws2812_bit0.val;
+      }
+      num++;
+      pdest++;
+    }
+    size++;
+    psrc++;
+  }
+  *translated_size = size;
+  *item_num = num;
+}
+
+void showDisplay() {
+  uint8_t* px = strip.getPixels();
+  if (px != NULL) {
+    // Truyền dữ liệu 256 LED (768 bytes) thẳng vào RMT Channel 0 phần cứng
+    // RMT tự phát xung chính xác tới từng nano giây, không bao giờ bị ngắt quãng
+    rmt_write_sample(WS2812_RMT_CHANNEL, px, NUM_LEDS * 3, true);
+    rmt_wait_tx_done(WS2812_RMT_CHANNEL, pdMS_TO_TICKS(35));
+  }
+}
+
 void initDisplay(uint8_t brightness) {
   precomputeXyTable();
   strip.begin();
-  gpio_set_drive_capability((gpio_num_t)LED_PIN, GPIO_DRIVE_CAP_3); // Dòng phát cực đại 40mA cho cạnh xung DIN 3.3V vuông vức
   strip.setBrightness(toHardwareBrightness(brightness));
   strip.clear();
-  strip.show();
-  dbgLog(TAG_LED, "Khởi tạo Adafruit_NeoPixel: %d bóng (DIN: GPIO %d, Độ sáng: %d/255, HW: %d) [Look-Up Table: 1 CHU KỲ ĐỌC RAM]",
-         NUM_LEDS, LED_PIN, brightness, toHardwareBrightness(brightness));
+
+  // Khởi tạo Hardware RMT CỐ ĐỊNH DUY NHẤT 1 LẦN khi boot
+  // Trên ESP32-C3: Dùng mem_block_num = 2 (gộp cả 2 khối RAM RMT = 96 items = 120µs buffer)
+  // Ngăn chặn hoàn toàn hiện tượng buffer underflow khi BLE hoặc RTOS ngắt CPU!
+  rmt_config_t config = RMT_DEFAULT_CONFIG_TX((gpio_num_t)LED_PIN, WS2812_RMT_CHANNEL);
+  config.clk_div = 2; // 80MHz / 2 = 40MHz
+  config.mem_block_num = 2; // Tối đa hóa bộ nhớ đệm 96 items
+  config.tx_config.idle_output_en = true;
+  config.tx_config.idle_level = RMT_IDLE_LEVEL_LOW;
+
+  rmt_config(&config);
+  rmt_driver_install(config.channel, 0, 0);
+  rmt_translator_init(config.channel, ws2812_rmt_adapter);
+
+  // Đặt mức phát dòng tối đa DRIVE_CAP_3 (40mA) đảm bảo biên độ tín hiệu đạt 3.3V vuông vắn sắc nét,
+  // triệt tiêu hoàn toàn sụt áp đường DIN làm LED nhận sai bit!
+  gpio_set_drive_capability((gpio_num_t)LED_PIN, GPIO_DRIVE_CAP_3);
+
+  showDisplay();
+  dbgLog(TAG_LED, "Khởi tạo Hardware RMT cố định: %d bóng (DIN: GPIO %d, Channel: 0, 96 RAM blocks, Drive: 40mA)",
+         NUM_LEDS, LED_PIN);
 }
 
 /**
@@ -77,7 +144,7 @@ void setPixelXY(int16_t x, int16_t y, uint32_t color) {
 
 void clearMatrix() {
   strip.clear();
-  strip.show();
+  showDisplay();
 }
 
 // Bảng tra cứu trước hàm Sin8 (256 bytes) cho 1 CPU Cycle (0..255 -> 0..255)
@@ -150,12 +217,12 @@ void fadeTransition(uint16_t durationMs) {
   for (int step = 6; step >= 0; step--) {
     memcpy(pix, fadeSnap, nBytes);
     strip.setBrightness((hwBri * step) / 6);
-    strip.show();
+    showDisplay();
     delay(stepDelay);
   }
   memcpy(pix, fadeSnap, nBytes); // Trả buffer gốc trước khi clear để lần sau không fade từ data rác
   strip.clear();
-  strip.show();
+  showDisplay();
   strip.setBrightness(hwBri); // Khôi phục đúng độ sáng phần cứng ban đầu
 }
 
@@ -169,12 +236,25 @@ struct FontChar {
 };
 
 // Bảng font 5x6: Chiều cao 6 pixel, dành riêng cho khung 6x8 (bỏ trống hàng 0 và 7)
+// Hỗ trợ trọn bộ chữ hoa A-Z, số 0-9, các ký tự dấu câu phổ biến và biểu tượng trái tim
 const FontChar PROGMEM FONT_5X6[] = {
   {' ', {0x00, 0x00, 0x00, 0x00, 0x00}},
   {'!', {0x00, 0x00, 0x2F, 0x00, 0x00}},
+  {'\"', {0x03, 0x00, 0x03, 0x00, 0x00}},
+  {'#', {0x14, 0x3F, 0x14, 0x3F, 0x14}},
+  {'$', {0x12, 0x2A, 0x3F, 0x2A, 0x24}},
+  {'%', {0x23, 0x13, 0x08, 0x24, 0x31}},
+  {'&', {0x16, 0x29, 0x2D, 0x12, 0x20}},
+  {'\'', {0x00, 0x03, 0x00, 0x00, 0x00}},
+  {'(', {0x00, 0x1C, 0x22, 0x00, 0x00}},
+  {')', {0x00, 0x22, 0x1C, 0x00, 0x00}},
+  {'*', {0x06, 0x0F, 0x1E, 0x0F, 0x06}}, // Biểu tượng TRÁI TIM YÊU THƯƠNG (Heart)
+  {'\x03', {0x06, 0x0F, 0x1E, 0x0F, 0x06}}, // ASCII 3 (Heart)
+  {'+', {0x00, 0x08, 0x3E, 0x08, 0x00}},
+  {',', {0x00, 0x30, 0x20, 0x00, 0x00}},
   {'-', {0x00, 0x08, 0x08, 0x08, 0x00}},
-  {':', {0x00, 0x14, 0x14, 0x00, 0x00}},
   {'.', {0x00, 0x20, 0x20, 0x00, 0x00}},
+  {'/', {0x20, 0x10, 0x08, 0x04, 0x02}},
   {'0', {0x1E, 0x21, 0x21, 0x21, 0x1E}},
   {'1', {0x00, 0x22, 0x3F, 0x20, 0x00}},
   {'2', {0x22, 0x31, 0x29, 0x25, 0x22}},
@@ -185,6 +265,13 @@ const FontChar PROGMEM FONT_5X6[] = {
   {'7', {0x01, 0x31, 0x09, 0x05, 0x03}},
   {'8', {0x1A, 0x25, 0x25, 0x25, 0x1A}},
   {'9', {0x06, 0x29, 0x29, 0x29, 0x1E}},
+  {':', {0x00, 0x14, 0x14, 0x00, 0x00}},
+  {';', {0x00, 0x34, 0x24, 0x00, 0x00}},
+  {'<', {0x08, 0x14, 0x22, 0x00, 0x00}},
+  {'=', {0x14, 0x14, 0x14, 0x14, 0x14}},
+  {'>', {0x00, 0x22, 0x14, 0x08, 0x00}},
+  {'?', {0x02, 0x01, 0x29, 0x05, 0x02}},
+  {'@', {0x1E, 0x21, 0x2D, 0x2D, 0x1E}},
   {'A', {0x3E, 0x09, 0x09, 0x09, 0x3E}},
   {'B', {0x3F, 0x25, 0x25, 0x25, 0x1A}},
   {'C', {0x1E, 0x21, 0x21, 0x21, 0x12}},
@@ -210,7 +297,13 @@ const FontChar PROGMEM FONT_5X6[] = {
   {'W', {0x3F, 0x10, 0x0C, 0x10, 0x3F}},
   {'X', {0x33, 0x0C, 0x0C, 0x33, 0x00}},
   {'Y', {0x07, 0x08, 0x30, 0x08, 0x07}},
-  {'Z', {0x31, 0x29, 0x25, 0x23, 0x21}}
+  {'Z', {0x31, 0x29, 0x25, 0x23, 0x21}},
+  {'[', {0x00, 0x3F, 0x21, 0x00, 0x00}},
+  {'\\', {0x02, 0x04, 0x08, 0x10, 0x20}},
+  {']', {0x00, 0x21, 0x3F, 0x00, 0x00}},
+  {'^', {0x04, 0x02, 0x01, 0x02, 0x04}},
+  {'_', {0x20, 0x20, 0x20, 0x20, 0x20}},
+  {'~', {0x02, 0x01, 0x02, 0x01, 0x00}}
 };
 #define FONT_CHAR_COUNT (sizeof(FONT_5X6) / sizeof(FontChar))
 
@@ -224,14 +317,124 @@ static const uint8_t* getCharCols(char c) {
   return FONT_5X6[0].cols;
 }
 
-void drawCharCylinder(int16_t startX, char c, uint32_t color) {
+uint8_t getCharColBits(char c, uint8_t col) {
+  if (col >= 5) return 0;
+  if (c >= 'a' && c <= 'z') c -= 32;
   const uint8_t* cols = getCharCols(c);
+  return pgm_read_byte(&cols[col]);
+}
+
+void sanitizeTextForDisplay(const char* src, char* dst, size_t dstSize) {
+  if (src == NULL || dst == NULL || dstSize == 0) return;
+  size_t si = 0;
+  size_t di = 0;
+
+  while (src[si] != '\0' && di < dstSize - 1) {
+    uint8_t b0 = (uint8_t)src[si];
+
+    // Nhận diện ký hiệu trái tim "<3"
+    if (b0 == '<' && src[si + 1] == '3') {
+      dst[di++] = '*'; // Biểu tượng trái tim trong font
+      si += 2;
+      continue;
+    }
+
+    if (b0 < 0x80) {
+      // 1-Byte ASCII thông thường
+      char c = (char)b0;
+      if (c >= 'a' && c <= 'z') c -= 32; // Chuẩn hóa chữ in hoa
+      dst[di++] = c;
+      si++;
+    } else if (b0 >= 0xC2 && b0 <= 0xDF) {
+      // 2-Byte UTF-8 (Tiếng Việt cơ bản)
+      uint8_t b1 = (uint8_t)src[si + 1];
+      if (b1 == 0) break;
+      char mapped = ' ';
+
+      if (b0 == 0xC3) {
+        switch (b1) {
+          case 0x80: case 0x81: case 0x82: case 0x83:
+          case 0xA0: case 0xA1: case 0xA2: case 0xA3: mapped = 'A'; break;
+          case 0x88: case 0x89: case 0x8A:
+          case 0xA8: case 0xA9: case 0xAA: mapped = 'E'; break;
+          case 0x8C: case 0x8D:
+          case 0xAC: case 0xAD: mapped = 'I'; break;
+          case 0x92: case 0x93: case 0x94: case 0x95:
+          case 0xB2: case 0xB3: case 0xB4: case 0xB5: mapped = 'O'; break;
+          case 0x99: case 0x9A:
+          case 0xB9: case 0xBA: mapped = 'U'; break;
+          case 0x9D: case 0xBD: mapped = 'Y'; break;
+          default: mapped = ' '; break;
+        }
+      } else if (b0 == 0xC4) {
+        switch (b1) {
+          case 0x82: case 0x83: mapped = 'A'; break; // Ă, ă
+          case 0x90: case 0x91: mapped = 'D'; break; // Đ, đ
+          default: mapped = ' '; break;
+        }
+      } else if (b0 == 0xC6) {
+        switch (b1) {
+          case 0xA0: case 0xA1: mapped = 'O'; break; // Ơ, ơ
+          case 0xAF: case 0xB0: mapped = 'U'; break; // Ư, ư
+          default: mapped = ' '; break;
+        }
+      }
+      if (mapped != ' ') dst[di++] = mapped;
+      si += 2;
+    } else if (b0 >= 0xE0 && b0 <= 0xEF) {
+      // 3-Byte UTF-8 (Tiếng Việt mở rộng có dấu hỏi, ngã, nặng + Emoji ❤️ / ♥)
+      uint8_t b1 = (uint8_t)src[si + 1];
+      uint8_t b2 = (uint8_t)src[si + 2];
+      if (b1 == 0 || b2 == 0) break;
+      char mapped = ' ';
+
+      if (b0 == 0xE1) {
+        if (b1 == 0xBA) {
+          if (b2 >= 0x80 && b2 <= 0x99) mapped = 'A';
+          else if (b2 >= 0x9A && b2 <= 0xAD) mapped = 'E';
+          else if (b2 >= 0xAE && b2 <= 0xB3) mapped = 'I';
+          else if (b2 >= 0xB4 && b2 <= 0xBF) mapped = 'O';
+        } else if (b1 == 0xBB) {
+          if (b2 >= 0x80 && b2 <= 0x97) mapped = 'O';
+          else if (b2 >= 0x98 && b2 <= 0xAF) mapped = 'U';
+          else if (b2 >= 0xB0 && b2 <= 0xB9) mapped = 'Y';
+        }
+      } else if (b0 == 0xE2) {
+        // Heart emoji: ❤️ (E2 9D A4) hoặc ♥ (E2 99 A5)
+        if ((b1 == 0x9D && b2 == 0xA4) || (b1 == 0x99 && b2 == 0xA5)) {
+          mapped = '*'; // Biểu tượng Trái Tim
+        }
+      }
+      if (mapped != ' ') dst[di++] = mapped;
+      si += 3;
+    } else if (b0 >= 0xF0 && b0 <= 0xF7) {
+      // 4-Byte UTF-8 (Emojis tình yêu: 💕 💖 💗 💞 💘)
+      uint8_t b1 = (uint8_t)src[si + 1];
+      uint8_t b2 = (uint8_t)src[si + 2];
+      uint8_t b3 = (uint8_t)src[si + 3];
+      if (b1 == 0 || b2 == 0 || b3 == 0) break;
+      if (b0 == 0xF0 && b1 == 0x9F && b2 == 0x92) {
+        dst[di++] = '*'; // Biểu tượng Trái Tim
+      }
+      si += 4;
+    } else {
+      si++;
+    }
+  }
+  dst[di] = '\0';
+}
+
+void drawCharCylinder(int16_t startX, char c, uint32_t color) {
   for (uint8_t col = 0; col < 5; col++) {
-    uint8_t colBits = pgm_read_byte(&cols[col]);
-    for (uint8_t r = 0; r < 6; r++) {
-      if ((colBits >> r) & 0x01) {
-        // Hàng 0 và Hàng 7 để trống (bỏ 2 hàng trên và dưới cùng), vẽ ở hàng 1..6
-        setPixelXY(startX + col, 1 + r, color);
+    int16_t screenX = startX + col;
+    // Cắt biên chính xác để ký tự cuộn ngoài màn hình không bị quấn đè sang mép đối diện
+    if (screenX >= 0 && screenX < MATRIX_WIDTH) {
+      uint8_t colBits = getCharColBits(c, col);
+      for (uint8_t r = 0; r < 6; r++) {
+        if ((colBits >> r) & 0x01) {
+          // Hàng 0 và Hàng 7 để trống, hiển thị ở hàng 1..6
+          setPixelXY(screenX, 1 + r, color);
+        }
       }
     }
   }
@@ -280,7 +483,7 @@ void displayOtaProgress(uint8_t percent, bool error) {
       }
     }
   }
-  strip.show();
+  showDisplay();
 }
 
 // ============================================================================
@@ -540,88 +743,5 @@ bool applySlotPreset(uint8_t slot, const char* presetName, uint8_t r, uint8_t g,
     return true;
   }
   return false;
-}
-
-// ============================================================================
-// ĐỒNG HỒ ĐỂ BÀN 360° KỸ THUẬT SỐ & THỜI TIẾT (DESK CLOCK)
-// ============================================================================
-static const uint16_t DIGIT_3X5[10] = {
-  0b111101101101111, // 0
-  0b010110010010111, // 1
-  0b111001111100111, // 2
-  0b111001111001111, // 3
-  0b101101111001001, // 4
-  0b111100111001111, // 5
-  0b111100111101111, // 6
-  0b111001001010010, // 7
-  0b111101111101111, // 8
-  0b111101111001111  // 9
-};
-
-static void drawDigit3x5(int16_t startX, int16_t startY, uint8_t digit, uint32_t color) {
-  if (digit > 9) digit = 0;
-  uint16_t bits = DIGIT_3X5[digit];
-  for (uint8_t r = 0; r < 5; r++) {
-    for (uint8_t c = 0; c < 3; c++) {
-      uint8_t shift = 14 - (r * 3 + c);
-      if ((bits >> shift) & 0x01) {
-        setPixelXY(startX + c, startY + r, color);
-      }
-    }
-  }
-}
-
-void renderDeskClock(uint8_t hour, uint8_t minute, bool colonBlink, int8_t temp, bool showTemp) {
-  strip.clear();
-  uint8_t h1 = (hour / 10) % 10;
-  uint8_t h2 = hour % 10;
-  uint8_t m1 = (minute / 10) % 10;
-  uint8_t m2 = minute % 10;
-
-  const uint32_t colHour  = strip.Color(0, 220, 255);   // Cyan băng mát mắt
-  const uint32_t colColon = strip.Color(255, 180, 20); // Vàng nắng nhấp nháy 1Hz
-  const uint32_t colMin   = strip.Color(245, 245, 255);  // Trắng tuyết tinh khôi
-  const uint32_t colTemp  = strip.Color(255, 140, 20); // Cam hổ phách cho nhiệt độ
-
-  // Chuẩn bị ký tự nhiệt độ ("-5C".."99C", font 5x6 sẵn có)
-  int t = constrain((int)temp, -9, 99);
-  char tc1 = 0, tc2 = '0';
-  bool twoChar = false;
-  if (t < 0) { tc1 = '-'; tc2 = (char)('0' + (-t)); twoChar = true; }
-  else if (t >= 10) { tc1 = (char)('0' + t / 10); tc2 = (char)('0' + t % 10); twoChar = true; }
-  else { tc2 = (char)('0' + t); }
-
-  // Hiển thị 2 mặt đối xứng 360° (Mặt trước: offset 0, Mặt sau: offset 16)
-  for (int face = 0; face < 2; face++) {
-    int16_t base = face * 16;
-
-    if (showTemp) {
-      if (twoChar) drawCharCylinder(base + 0, tc1, colTemp);
-      drawCharCylinder(base + 5, tc2, colTemp);
-      drawCharCylinder(base + 10, 'C', colTemp);
-    } else {
-      // Giờ (H1, H2)
-      drawDigit3x5(base + 1, 1, h1, colHour);
-      drawDigit3x5(base + 5, 1, h2, colHour);
-
-      // Dấu hai chấm (Colon)
-      if (colonBlink) {
-        setPixelXY(base + 8, 2, colColon);
-        setPixelXY(base + 8, 4, colColon);
-      }
-
-      // Phút (M1, M2)
-      drawDigit3x5(base + 9, 1, m1, colMin);
-      drawDigit3x5(base + 13, 1, m2, colMin);
-    }
-
-    // Dải đèn đế trang trí hàng 7
-    for (int x = 0; x < 16; x++) {
-      setPixelXY(base + x, 7, strip.Color(2, 8, 18));
-    }
-    // Điểm nhấn công nghệ góc trên
-    setPixelXY(base + 0, 0, strip.Color(0, 40, 80));
-    setPixelXY(base + 15, 0, strip.Color(0, 40, 80));
-  }
 }
 

@@ -45,7 +45,7 @@ void printUartHelp() {
   Serial.print(F(
     "\n=== LED MATRIX 360 CLI ===\n"
     " status, help, reboot\n"
-    " mode <0..15>, next, prev, bright <5..255>, speed <10..100>, save\n"
+    " mode <0..12>, next, prev, bright <5..255>, speed <10..100>, save\n"
     " mpu, touch, power, polarity [h/l], heartbeat <ms>\n"
     " text [r g b] <msg>, color <r g b>, clear, weather <temp> <id>\n"
     " time <h> [m] [s], pomo, ota [abort]\n"
@@ -217,7 +217,7 @@ bool executeCliCommand(const char* cmdLine) {
 
   // 5. NEXT
   if (strcmp(cmd, "next") == 0) {
-    currentMode = (currentMode + 1) % TOTAL_MODES;
+    currentMode = getNextCycleMode(currentMode);
     markSettingsChanged();
     dbgLog(TAG_FX, "Đã chuyển sang Mode tiếp theo: [%d] %s", currentMode, getModeName(currentMode));
     return true;
@@ -225,7 +225,7 @@ bool executeCliCommand(const char* cmdLine) {
 
   // 6. PREV
   if (strcmp(cmd, "prev") == 0) {
-    currentMode = (currentMode + TOTAL_MODES - 1) % TOTAL_MODES;
+    currentMode = getPrevCycleMode(currentMode);
     markSettingsChanged();
     dbgLog(TAG_FX, "Đã chuyển sang Mode trước đó: [%d] %s", currentMode, getModeName(currentMode));
     return true;
@@ -238,7 +238,7 @@ bool executeCliCommand(const char* cmdLine) {
       b = constrain(b, 5, 255);
       currentBrightness = b;
       strip.setBrightness(toHardwareBrightness(currentBrightness));
-      strip.show();
+      showDisplay();
       markSettingsChanged(); // Không ghi Flash trực tiếp mỗi 100ms khi kéo slider
       dbgLog(TAG_LED, "Đã đặt độ sáng mới: %d/255 (HW: %d)", currentBrightness, toHardwareBrightness(currentBrightness));
     } else {
@@ -357,7 +357,7 @@ bool executeCliCommand(const char* cmdLine) {
     if (sscanf(arg, "%d %d %d %d %d", &x, &y, &r, &g, &b) == 5) {
       if (x >= 0 && x < MATRIX_WIDTH && y >= 0 && y < MATRIX_HEIGHT) {
         setPixelXY(x, y, strip.Color(r, g, b));
-        strip.show();
+        showDisplay();
         dbgLog(TAG_LED, "Đã sáng LED tại tọa độ (%d, %d) màu RGB(%d, %d, %d)", x, y, r, g, b);
         return false;
       } else {
@@ -378,7 +378,7 @@ bool executeCliCommand(const char* cmdLine) {
           setPixelXY(x, y, strip.Color(r, g, b));
         }
       }
-      strip.show();
+      showDisplay();
       dbgLog(TAG_LED, "Đã tô toàn bộ 256 LED với màu RGB(%d, %d, %d)", r, g, b);
       return false;
     } else {
@@ -394,23 +394,31 @@ bool executeCliCommand(const char* cmdLine) {
     return false;
   }
 
-  // 17. TEXT <nội dung> hoặc TEXT <r> <g> <b> <nội dung>
+  // 17. TEXT <nội dung> hoặc TEXT <r> <g> <b> [speed] <nội dung>
   if (strcmp(cmd, "text") == 0 || strcmp(cmd, "scroll") == 0) {
     if (arg != NULL && strlen(arg) > 0) {
       uint32_t textColor = strip.Color(0, 220, 255); // Mặc định xanh Cyan sáng
+      uint16_t textSpeed = 125; // 125ms mặc định
       const char* textContent = arg;
-      int r, g, b;
+      int r, g, b, spd;
       int consumed = 0;
-      if (sscanf(arg, "%d %d %d %n", &r, &g, &b, &consumed) >= 3 && consumed > 0) {
+      if (sscanf(arg, "%d %d %d %d %n", &r, &g, &b, &spd, &consumed) >= 4 && consumed > 0) {
+        textColor = strip.Color(r, g, b);
+        textSpeed = (uint16_t)spd;
+        textContent = arg + consumed;
+        while (*textContent == ' ') textContent++;
+      } else if (sscanf(arg, "%d %d %d %n", &r, &g, &b, &consumed) >= 3 && consumed > 0) {
         textColor = strip.Color(r, g, b);
         textContent = arg + consumed;
         while (*textContent == ' ') textContent++;
       }
-      dbgLog(TAG_FX, "Bắt đầu chạy chữ 360°: '%s'", textContent);
-      effectCylinderScrollText(textContent, textColor, 75);
+      setMarqueeState(textContent, textColor, textSpeed);
+      currentMode = 13;
+      markSettingsChanged();
+      dbgLog(TAG_FX, "Bắt đầu chạy chữ 360° Mode 13: '%s' | Tốc độ: %dms", textContent, textSpeed);
       return true; // Ngắt hiệu ứng cũ
     } else {
-      dbgLog(TAG_CLI, "Cú pháp: text <nội dung> hoặc text <r> <g> <b> <nội dung>");
+      dbgLog(TAG_CLI, "Cú pháp: text <nội dung> hoặc text <r> <g> <b> [speed] <nội dung>");
     }
     return false;
   }
@@ -461,7 +469,7 @@ bool executeCliCommand(const char* cmdLine) {
         currentMode = 11;
         saveSettingsToFlash();
         renderFourSlotsToMatrix();
-        strip.show();
+        showDisplay();
         dbgLog(TAG_CLI, "Chuyển sang Chế độ hiển thị 4 Ô Bitmap (Mode 11)");
         return true;
       }
@@ -503,7 +511,7 @@ bool executeCliCommand(const char* cmdLine) {
           currentMode = 11;
           markSettingsChanged();
           renderFourSlotsToMatrix();
-          strip.show();
+          showDisplay();
           markSlotsDirty();
           return true;
         }
@@ -513,7 +521,7 @@ bool executeCliCommand(const char* cmdLine) {
     return false;
   }
 
-  // 19b. TIME <giờ> [phút] [giây]: đồng bộ RTC để thử chu kỳ Ngày/Đêm của Mode 15
+  // 19b. TIME <giờ> [phút] [giây]: đồng bộ RTC để thử chu kỳ Ngày/Đêm của Mode 12
   if (strcmp(cmd, "time") == 0) {
     if (arg != NULL) {
       int h = 12, m = 0, s = 0;
@@ -528,10 +536,10 @@ bool executeCliCommand(const char* cmdLine) {
     return false;
   }
 
-  // 21. POMO / POMODORO: Kích hoạt đồng hồ Pomodoro 25 phút từ xa qua BLE/UART
-  if (strcmp(cmd, "pomo") == 0 || strcmp(cmd, "pomodoro") == 0) {
-    pendingPomodoroTrigger = true;
-    dbgLog(TAG_FX, "Kích hoạt đồng hồ Pomodoro 25 phút từ lệnh điều khiển!");
+  // 21. WARMLIGHT: Kích hoạt ánh sáng vàng thân thiện mắt
+  if (strcmp(cmd, "warm") == 0 || strcmp(cmd, "warmlight") == 0 || strcmp(cmd, "pomo") == 0) {
+    pendingHorizontalTrigger = true;
+    dbgLog(TAG_FX, "Kích hoạt Ánh Sáng Vàng Thân Thiện Cho Mắt!");
     return true;
   }
 

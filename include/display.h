@@ -15,6 +15,9 @@ static inline uint8_t toHardwareBrightness(uint8_t uiBri) {
 // Khởi tạo hiển thị
 void initDisplay(uint8_t brightness);
 
+// Xuất khung hình an toàn ra ma trận LED (nhường CPU ngắt BLE/FreeRTOS và chốt chắc chắn mức LOW trên chân DIN)
+void showDisplay();
+
 // Chuyển đổi tọa độ 2D hình trụ (x, y) sang chỉ số LED trong chuỗi 256 bóng
 uint16_t XY(int16_t x, int16_t y);
 
@@ -35,6 +38,12 @@ uint32_t scaleColor8(uint32_t c, uint8_t k8);
 
 // Vẽ 1 ký tự font 5x7 lên vòng trụ 360 độ
 void drawCharCylinder(int16_t startX, char c, uint32_t color);
+
+// Lấy bit dữ liệu cột thứ col (0..4) của ký tự c trong bảng font 5x6
+uint8_t getCharColBits(char c, uint8_t col);
+
+// Chuẩn hóa chuỗi văn bản (UTF-8 tiếng Việt -> ASCII hoa không dấu, emoji tim -> icon '*')
+void sanitizeTextForDisplay(const char* src, char* dst, size_t dstSize);
 
 // Quản lý màu tĩnh người dùng chọn từ App (Custom Static Color)
 void setCustomStaticColor(uint8_t r, uint8_t g, uint8_t b);
@@ -65,9 +74,6 @@ uint32_t getSlotPixel(uint8_t slot, uint8_t x, uint8_t y);
 
 // Chuyển cảnh mượt mà giữa các mode (Cross-fade Transition)
 void fadeTransition(uint16_t durationMs = 240);
-
-// Hiển thị đồng hồ để bàn 360 độ (Desk Clock)
-void renderDeskClock(uint8_t hour, uint8_t minute, bool colonBlink, int8_t temp = 25, bool showTemp = false);
 
 // Vẽ dữ liệu 4 ô lên ma trận LED (có hỗ trợ Animation đa khung hình)
 void renderFourSlotsToMatrix();

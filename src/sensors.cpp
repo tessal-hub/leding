@@ -11,7 +11,7 @@
 bool mpuFound = false;
 uint8_t currentBrightness = DEFAULT_BRIGHTNESS;
 uint8_t currentSpeed = 50;
-volatile uint8_t currentMode = 0;
+volatile uint8_t currentMode = DEFAULT_MODE;
 
 ChargeState currentChargeState = DISCHARGING;
 bool userOverrideCharging = false;
@@ -36,28 +36,36 @@ static bool hasMovedDuringHold = false;
 bool chgStatActiveLow = CHG_STAT_ACTIVE_LOW;
 static unsigned long lastRedPulseTime = 0;
 static bool hasRedPulse = false;
-static bool wasPomodoroTilted = false;
-bool checkPomodoroOrientation();
+static bool wasHorizontalTilted = false;
+bool checkHorizontalOrientation();
 
 #if CONFIG_IDF_TARGET_ESP32C3
 static void initAdcCal() {
   analogReadResolution(12);
+  analogSetAttenuation(ADC_11db);
+  // Bật pull-down phần cứng ESP32-C3 cho 2 chân sạc
+  gpio_pulldown_en((gpio_num_t)PIN_VBUS);
+  gpio_pulldown_en((gpio_num_t)PIN_CHG_STAT);
   dbgLog(TAG_PWR, "ADC eFuse: Kích hoạt bộ chuyển đổi ADC hiệu chuẩn nhà máy của chip ESP32-C3!");
 }
 
 uint16_t getStatPinMilliVolts() {
-  uint32_t maxVal = 0;
-  for (int i = 0; i < 6; i++) {
-    uint32_t mv = analogReadMilliVolts(PIN_CHG_STAT);
-    if (mv > maxVal) maxVal = mv;
-    delayMicroseconds(60);
+  uint32_t sum = 0;
+  for (int i = 0; i < 8; i++) {
+    sum += analogReadMilliVolts(PIN_CHG_STAT);
+    delayMicroseconds(40);
   }
-  return (uint16_t)maxVal;
+  return (uint16_t)(sum / 8);
 }
 
 bool isVbusPlugged() {
-  uint32_t mv = analogReadMilliVolts(PIN_VBUS);
-  return (mv >= 1200) || (digitalRead(PIN_VBUS) == HIGH);
+  uint32_t sum = 0;
+  for (int i = 0; i < 8; i++) {
+    sum += analogReadMilliVolts(PIN_VBUS);
+    delayMicroseconds(40);
+  }
+  uint16_t avgMv = (uint16_t)(sum / 8);
+  return (avgMv >= 1500) || (digitalRead(PIN_VBUS) == HIGH && avgMv >= 1000);
 }
 #else
 // eFuse VRef Calibration (Dành cho chip ESP32 Classic D0WDQ6)
@@ -78,22 +86,24 @@ static void initAdcCal() {
 }
 
 uint16_t getStatPinMilliVolts() {
-  uint32_t maxVal = 0;
-  for (int i = 0; i < 6; i++) {
+  uint32_t sum = 0;
+  for (int i = 0; i < 8; i++) {
     uint32_t raw = analogRead(PIN_CHG_STAT);
-    if (raw > maxVal) maxVal = raw;
-    delayMicroseconds(60);
+    sum += efuseCalAvailable ? (uint16_t)esp_adc_cal_raw_to_voltage(raw, &adcChars) : (uint16_t)((raw * 3300) / 4095);
+    delayMicroseconds(40);
   }
-  if (efuseCalAvailable) {
-    return (uint16_t)esp_adc_cal_raw_to_voltage(maxVal, &adcChars);
-  }
-  return (uint16_t)((maxVal * 3300) / 4095);
+  return (uint16_t)(sum / 8);
 }
 
 bool isVbusPlugged() {
-  uint32_t raw = analogRead(PIN_VBUS);
-  uint16_t mv = efuseCalAvailable ? (uint16_t)esp_adc_cal_raw_to_voltage(raw, &adcChars) : (uint16_t)((raw * 3300) / 4095);
-  return (mv >= 1200) || (digitalRead(PIN_VBUS) == HIGH);
+  uint32_t sum = 0;
+  for (int i = 0; i < 8; i++) {
+    uint32_t raw = analogRead(PIN_VBUS);
+    sum += efuseCalAvailable ? (uint16_t)esp_adc_cal_raw_to_voltage(raw, &adcChars) : (uint16_t)((raw * 3300) / 4095);
+    delayMicroseconds(40);
+  }
+  uint16_t avgMv = (uint16_t)(sum / 8);
+  return (avgMv >= 1500) || (digitalRead(PIN_VBUS) == HIGH && avgMv >= 1000);
 }
 #endif
 
@@ -107,7 +117,9 @@ bool isStatPinHigh() {
   return (millis() - lastRedPulseTime < CHG_PULSE_HOLD_MS);
 }
 
-static bool lastVbusState = false;
+static bool debouncedVbus = false;
+static bool lastRawVbus = false;
+static unsigned long vbusDebounceTimer = 0;
 static unsigned long vbusConnectTime = 0;
 
 ChargeState updateChargeState() {
@@ -117,63 +129,66 @@ ChargeState updateChargeState() {
 #else
   unsigned long now = millis();
   static unsigned long lastChgCheck = 0;
-  if (now - lastChgCheck < 150 && lastChgCheck != 0) {
+  if (now - lastChgCheck < 100 && lastChgCheck != 0) {
     return currentChargeState;
   }
   lastChgCheck = now;
 
-  bool vbusPlugged = isVbusPlugged();
-
-  // Bắt sự kiện vừa cắm sạc để mở khoảng đệm chờ IP2312 khởi động mềm
-  if (vbusPlugged && !lastVbusState) {
-    vbusConnectTime = millis();
-    lastVbusState = true;
-  } else if (!vbusPlugged) {
-    lastVbusState = false;
-    hasRedPulse = false; // Reset cờ xung khi rút sạc
+  bool rawVbus = isVbusPlugged();
+  // Lọc chống dội VBUS 250ms (triệt tiêu 100% nhiễu khi rút cắm hoặc tải xung LED)
+  if (rawVbus != lastRawVbus) {
+    lastRawVbus = rawVbus;
+    vbusDebounceTimer = now;
+  } else if (now - vbusDebounceTimer >= 250) {
+    if (rawVbus != debouncedVbus) {
+      debouncedVbus = rawVbus;
+      if (debouncedVbus) {
+        vbusConnectTime = now;
+        hasRedPulse = false;
+        dbgLog(TAG_PWR, "VBUS: ĐÃ PHÁT HIỆN CẮM NGUỒN 5V USB (Điện áp VBUS >= 1.5V)!");
+      } else {
+        hasRedPulse = false;
+        dbgLog(TAG_PWR, "VBUS: ĐÃ RÚT CÁP NGUỒN 5V USB (Chuyển sang pin)!");
+      }
+    }
   }
 
   bool statHigh = isStatPinHigh();
-  // Nếu chgStatActiveLow = true  (Cathode kéo mass): Đang sạc = 0V / LOW, Đầy = >700mV
-  // Nếu chgStatActiveLow = false (Anode kích dương): Đang sạc = >700mV, Đầy = 0V / LOW
+  // Active Low: Đang sạc = 0V, Đầy = >700mV
+  // Active High: Đang sạc = >700mV, Đầy = 0V
   bool redLedActive = chgStatActiveLow ? (!statHigh) : statHigh;
 
   ChargeState newState;
-  if (!vbusPlugged) {
+  if (!debouncedVbus) {
     newState = DISCHARGING;
   } else if (redLedActive) {
     newState = CHARGING;
   } else {
-    // Khoảng đệm chống nháy xanh khi vừa cắm sạc:
-    // Chip IP2312 mất ~200ms - 500ms khởi động mềm kiểm tra pin trước khi bật LED đỏ.
-    // Trong thời gian này, giữ nguyên trạng thái CHARGING (màu cam).
-    // Chỉ sau khi hết thời gian đệm mà LED đỏ vẫn tắt thì mới xác nhận là PIN ĐÃ ĐẦY (FULL).
-    if (millis() - vbusConnectTime < CHG_SOFT_START_HOLD_MS) {
+    // Trong khoảng đệm 1.5s khởi động mềm của IP2312: giữ CHARGING, không nhảy nhầm sang FULL
+    if (now - vbusConnectTime < CHG_SOFT_START_HOLD_MS) {
       newState = CHARGING;
     } else {
       newState = FULL;
-      hasRedPulse = false;
     }
   }
 
-  // Chống dội tín hiệu mượt mà (80ms)
+  // Chống dội trạng thái (Debounce 120ms)
   if (newState != currentChargeState) {
     if (newState != rawLastState) {
       rawLastState = newState;
-      stateDebounceTimer = millis();
-    } else if (millis() - stateDebounceTimer > 80) {
+      stateDebounceTimer = now;
+    } else if (now - stateDebounceTimer > 120) {
       currentChargeState = rawLastState;
 
       if (currentChargeState == DISCHARGING) {
-        userOverrideCharging = false; // Rút sạc: quay về dùng bình thường
-        dbgLog(TAG_PWR, "ĐÃ RÚT CÁP SẠC 5V -> CHUYỂN SANG DÙNG PIN 18650");
+        userOverrideCharging = false;
+        dbgLog(TAG_PWR, "TRẠNG THÁI NGUỒN: DÙNG PIN 18650");
       } else if (currentChargeState == CHARGING) {
         userOverrideCharging = false;
-        uint16_t statMv = getStatPinMilliVolts();
-        dbgLog(TAG_PWR, "ĐÃ CẮM CÁP SẠC 5V -> ĐANG SẠC PIN (VBUS=1, STAT=%dmV%s)",
-               statMv, (statMv >= CHG_STAT_THRESHOLD_MV) ? " / LED ĐỎ SÁNG" : " / ĐANG KHỞI ĐỘNG MỀM");
+        dbgLog(TAG_PWR, "TRẠNG THÁI NGUỒN: ĐANG SẠC PIN (Amber) [VBUS=1, STAT=%dmV%s]",
+               getStatPinMilliVolts(), (getStatPinMilliVolts() >= CHG_STAT_THRESHOLD_MV) ? " / LED ĐỎ SÁNG" : " / KHỞI ĐỘNG MỀM");
       } else if (currentChargeState == FULL) {
-        dbgLog(TAG_PWR, "PIN ĐÃ ĐẦY 100%% -> SẠC ĐẦY (VBUS=1, STAT=%dmV / LED ĐỎ TẮT)", getStatPinMilliVolts());
+        dbgLog(TAG_PWR, "TRẠNG THÁI NGUỒN: PIN ĐÃ ĐẦY 100%% [VBUS=1, STAT=%dmV / LED ĐỎ TẮT]", getStatPinMilliVolts());
       }
     }
   }
@@ -184,24 +199,66 @@ ChargeState updateChargeState() {
 
 const char* getModeName(uint8_t mode) {
   switch (mode) {
-    case 0: return "Tu dong chuyen doi (Auto Cycle Curated)";
-    case 1: return "Den dung nham 3D Noise (Lava Noise - Mac dinh)";
-    case 2: return "Den vien 4 canh hop (Edge Light - Toi gian)";
-    case 3: return "Song nhip 4 mat hop (Face Wave - Chuyen mau)";
-    case 4: return "Den nghieng & lac MPU (Tilt Glow MPU - Tuong tac)";
-    case 5: return "Nuoc chay & song xo lech (Water Physics MPU - Showpiece)";
-    case 6: return "Nhip tho ban dem (Night Breathing - Em diu)";
-    case 7: return "Cuc quang uon luon (Aurora Flow - Du bi)";
-    case 8: return "DO HUONG DI DAY LED 0 -> 255 (Calibration Debug)";
+    case 0: return "Tu dong doi canh Lang Man (Romantic Cycle)";
+    case 1: return "Nhip dap trai tim (Heartbeat Pulse - Mac dinh)";
+    case 2: return "Pha Le Thach Anh Tim (Amethyst Crystal Dream)";
+    case 3: return "Anh nen hen ho lung linh (Candlelight Romance)";
+    case 4: return "Cu chi yeu thuong MPU (Love Tilt & Caress)";
+    case 5: return "Lua am dem dong (Cozy Fireplace Romance)";
+    case 6: return "Bien Hoa Oai Huong Tim (Lavender Twilight Breeze)";
+    case 7: return "Cuc quang tinh nhan (Lover's Aurora)";
+    case 8: return "Bau troi ngan sao hen uoc (Starry Night Romance)";
     case 9: return "Tat den (Standby / Off)";
-    case 10: return "Mau tinh tuy chon theo App (Static Color)";
-    case 11: return "Hien thi 4 o tuy bien (4-Slot Custom Bitmap)";
-    case 12: return "Dong ho de ban 360 do (Desk Clock)";
-    case 13: return "Nhip dap trai tim (Heartbeat Pulse - Lang man)";
-    case 14: return "Song tinh yeu lan toa (Love Ripple - Mo mong)";
-    case 15: return "Thoi tiet 360 do Ngay/Dem (Live Weather Scene)";
+    case 10: return "Mau tinh lang man theo App (Romantic Mood Color)";
+    case 11: return "4 Khung hinh ky niem tinh yeu (4-Slot Love Memories)";
+    case 12: return "Doa hong he no (Blooming Rose of Love)";
+    case 13: return "Chu chay 360 do (Romantic Cylinder Marquee)";
+    case 14: return "Thoi tiet: Nang dep 360 do (Clear Sky & Sunbeams)";
+    case 15: return "Thoi tiet: Mua roi 360 do (Rain & Puddle Ripples)";
+    case 16: return "Thoi tiet: May troi 360 do (Volumetric Clouds)";
+    case 17: return "Thoi tiet: Giong bao 360 do (Thunderstorm & Lightning)";
     default: return "Khong xac dinh";
   }
+}
+
+// ============================================================================
+// CHU KỲ CHUYỂN MODE NÚT BẤM VẬT LÝ (TOUCH BUTTON CYCLE)
+// ============================================================================
+// Chỉ tuần hoàn qua các chế độ hiển thị lãng mạn độc lập 1 -> 12.
+// Chế độ Auto-Cycle (Mode 0), Màu tĩnh (Mode 10), và Kỷ niệm (Mode 11) kích hoạt qua App.
+static const uint8_t BUTTON_CYCLE_MODES[] = {
+  1,  // Nhịp đập trái tim (Heartbeat Pulse - Mặc định)
+  2,  // Pha Lê Thạch Anh Tím (Amethyst Crystal Dream)
+  3,  // Ánh nến hẹn hò lung linh (Candlelight Romance)
+  4,  // Cử chỉ yêu thương MPU (Love Tilt & Caress)
+  5,  // Lửa ấm đêm đông (Cozy Fireplace Romance)
+  6,  // Biển Hoa Oải Hương Tím (Lavender Twilight Breeze)
+  7,  // Cực quang tình nhân (Lover's Aurora)
+  8,  // Bầu trời ngàn sao hẹn ước (Starry Night Romance)
+  12, // Đóa hồng hé nở (Blooming Rose of Love)
+  14, // Thời tiết: Nắng đẹp 360° (Clear Sky & Sunbeams)
+  15, // Thời tiết: Mưa rơi 360° (Rain & Puddle Ripples)
+  16, // Thời tiết: Mây trời 360° (Volumetric Clouds)
+  17  // Thời tiết: Giông bão 360° (Thunderstorm & Lightning)
+};
+static const uint8_t NUM_CYCLE_MODES = sizeof(BUTTON_CYCLE_MODES) / sizeof(BUTTON_CYCLE_MODES[0]);
+
+uint8_t getNextCycleMode(uint8_t current) {
+  for (uint8_t i = 0; i < NUM_CYCLE_MODES; i++) {
+    if (BUTTON_CYCLE_MODES[i] == current) {
+      return BUTTON_CYCLE_MODES[(i + 1) % NUM_CYCLE_MODES];
+    }
+  }
+  return BUTTON_CYCLE_MODES[0]; // Nếu đang ở Mode 9 (tắt), 10 (màu tĩnh) hay 11 (số) -> chuyển về Mode 1
+}
+
+uint8_t getPrevCycleMode(uint8_t current) {
+  for (uint8_t i = 0; i < NUM_CYCLE_MODES; i++) {
+    if (BUTTON_CYCLE_MODES[i] == current) {
+      return BUTTON_CYCLE_MODES[(i + NUM_CYCLE_MODES - 1) % NUM_CYCLE_MODES];
+    }
+  }
+  return BUTTON_CYCLE_MODES[0];
 }
 
 static bool isSettingsDirty = false;
@@ -251,7 +308,7 @@ void loadSettingsFromFlash() {
   if (currentBrightness < 5) {
     currentBrightness = 5;
   }
-  if (currentMode >= TOTAL_MODES) {
+  if (currentMode >= TOTAL_MODES || currentMode == 0) {
     currentMode = DEFAULT_MODE;
   }
   if (currentSpeed < 10 || currentSpeed > 100) {
@@ -312,6 +369,8 @@ void initSensors() {
 #if ENABLE_BATTERY_MONITOR
   pinMode(PIN_VBUS, INPUT_PULLDOWN);
   pinMode(PIN_CHG_STAT, INPUT_PULLDOWN);
+  gpio_pulldown_en((gpio_num_t)PIN_VBUS);
+  gpio_pulldown_en((gpio_num_t)PIN_CHG_STAT);
   updateChargeState(); // Khởi tạo bộ đếm sạc
   delay(100);
   updateChargeState(); // Chốt trạng thái sạc ngay khi khởi động
@@ -328,7 +387,7 @@ void initSensors() {
   // Khởi tạo MPU-6050
   initMPU6050();
   if (mpuFound) {
-    wasPomodoroTilted = checkPomodoroOrientation();
+    wasHorizontalTilted = checkHorizontalOrientation();
   }
 }
 
@@ -390,7 +449,7 @@ void updateMPUBrightness() {
     if (newBrightness != currentBrightness) {
       currentBrightness = newBrightness;
       strip.setBrightness(toHardwareBrightness(currentBrightness));
-      strip.show();
+      showDisplay();
       dbgLog(TAG_MPU, "Nghiêng: %.1f° -> Độ sáng cập nhật: %d/255 (HW: %d)", clampedAngle, currentBrightness, toHardwareBrightness(currentBrightness));
     }
   }
@@ -497,7 +556,7 @@ bool checkButtonAndMPU() {
         dbgLog(TAG_PWR, "Người dùng chạm nút can thiệp: Bật đèn trong lúc cắm sạc!");
       }
       fadeTransition(240);
-      currentMode = (currentMode + 1) % TOTAL_MODES;
+      currentMode = getNextCycleMode(currentMode);
       markSettingsChanged();
 
       dbgLog(TAG_TOUCH, "BẤM NHANH (%lums) -> Chuyển sang Mode [%d]: %s",
@@ -511,7 +570,7 @@ bool checkButtonAndMPU() {
 
 bool delayWithTouch(uint16_t ms) {
   if (isOtaModeActive) return true;
-  if (!isPomodoroActive && !isEmergencyActive && currentSpeed >= 10 && currentSpeed <= 100 && currentSpeed != 50) {
+  if (!isHorizontalActive && !isEmergencyActive && currentSpeed >= 10 && currentSpeed <= 100 && currentSpeed != 50) {
     ms = (uint16_t)max(1, (int)round((float)ms * (50.0f / (float)currentSpeed)));
   }
   unsigned long start = millis();
@@ -530,9 +589,9 @@ bool delayWithTouch(uint16_t ms) {
       pendingEmergencyFlashlight = true;
       return true;
     }
-    // Lật hộp Pomodoro (chỉ khi không đang chạy Pomodoro)
-    if (!isPomodoroActive && checkPomodoroTrigger()) {
-      pendingPomodoroTrigger = true;
+    // Xoay ngang đèn (chỉ khi không đang ở chế độ đèn nằm ngang)
+    if (!isHorizontalActive && checkHorizontalTrigger()) {
+      pendingHorizontalTrigger = true;
       return true;
     }
     // Xử lý đọc và thực thi lệnh từ UART CLI ngay lập tức
@@ -551,12 +610,12 @@ bool delayWithTouch(uint16_t ms) {
 }
 
 // ============================================================================
-// CỬ CHỈ VẬT LÝ MPU-6050 (POMODORO & ĐÈN PIN KHẨN CẤP)
+// CỬ CHỈ VẬT LÝ MPU-6050 (ĐÈN XOAY NGANG & ĐÈN PIN KHẨN CẤP)
 // ============================================================================
-bool isPomodoroActive = false;
+bool isHorizontalActive = false;
 bool isEmergencyActive = false;
 bool pendingEmergencyFlashlight = false;
-bool pendingPomodoroTrigger = false;
+bool pendingHorizontalTrigger = false;
 
 static uint8_t shakeCount = 0;
 static unsigned long lastShakeTime = 0;
@@ -587,24 +646,76 @@ bool checkEmergencyShake() {
   return false;
 }
 
-bool checkPomodoroOrientation() {
+static unsigned long horizontalTiltStart = 0;
+
+bool checkHorizontalOrientation() {
   if (!mpuFound) return false;
   int16_t ax, ay, az;
   if (!readMpuAccel(ax, ay, az)) return false;
 
   float pitch = atan2((float)ax, sqrt((float)ay * ay + (float)az * az)) * 180.0f / PI;
   float roll  = atan2((float)ay, sqrt((float)ax * ax + (float)az * az)) * 180.0f / PI;
+  float maxTilt = max(abs(pitch), abs(roll));
 
-  // Khi người dùng lật hộp nằm nghiêng hẳn sang một bên (> 60 độ)
-  return (abs(pitch) > 60.0f || abs(roll) > 60.0f);
+  // Khi đang ở chế độ đèn nằm ngang: chỉ thoát khi đèn đã được dựng đứng lại (<= HORIZONTAL_UPRIGHT_DEG)
+  if (isHorizontalActive) {
+    return (maxTilt > HORIZONTAL_UPRIGHT_DEG);
+  }
+
+  // Khi chưa ở chế độ nằm ngang: tính là nằm ngang khi góc dứt khoát >= HORIZONTAL_TILT_DEG
+  return (maxTilt >= HORIZONTAL_TILT_DEG);
 }
 
-bool checkPomodoroTrigger() {
+bool checkHorizontalTrigger() {
   if (!mpuFound || millis() < 3000) return false;
-  bool isTilted = checkPomodoroOrientation();
-  bool trigger = (!wasPomodoroTilted && isTilted);
-  wasPomodoroTilted = isTilted;
-  return trigger;
+  // Bỏ qua hoàn toàn nếu người dùng đang chạm/giữ nút cảm ứng (tránh kích hoạt khi nghiêng chỉnh sáng)
+  if (isButtonPressed || isAdjustingBrightness) {
+    horizontalTiltStart = 0;
+    return false;
+  }
+
+  int16_t ax, ay, az;
+  if (!readMpuAccel(ax, ay, az)) {
+    horizontalTiltStart = 0;
+    return false;
+  }
+
+  float pitch = atan2((float)ax, sqrt((float)ay * ay + (float)az * az)) * 180.0f / PI;
+  float roll  = atan2((float)ay, sqrt((float)ax * ax + (float)az * az)) * 180.0f / PI;
+  float maxTilt = max(abs(pitch), abs(roll));
+  float totalG = sqrt((float)ax * ax + (float)ay * ay + (float)az * az) / 16384.0f;
+
+  // Nếu đèn đang dựng đứng (<= HORIZONTAL_UPRIGHT_DEG), sẵn sàng cho lần xoay ngang tiếp theo
+  if (maxTilt <= HORIZONTAL_UPRIGHT_DEG) {
+    wasHorizontalTilted = false;
+    horizontalTiltStart = 0;
+    return false;
+  }
+
+  // Nếu chưa dựng đứng lại từ lần trước, không kích hoạt lặp lại
+  if (wasHorizontalTilted) {
+    horizontalTiltStart = 0;
+    return false;
+  }
+
+  // 1. Phải xoay ngang đèn (>= HORIZONTAL_TILT_DEG, mặc định 60 độ)
+  // 2. Và phải tương đối ổn định trên mặt phẳng (không đang vung lắc mạnh: 0.7g < totalG < 1.3g)
+  if (maxTilt >= HORIZONTAL_TILT_DEG && totalG > 0.70f && totalG < 1.30f) {
+    if (horizontalTiltStart == 0) {
+      horizontalTiltStart = millis();
+    } else if (millis() - horizontalTiltStart >= HORIZONTAL_HOLD_TRIGGER_MS) {
+      // Đã giữ nằm ngang ổn định liên tục đủ thời gian (350ms)
+      horizontalTiltStart = 0;
+      wasHorizontalTilted = true;
+      dbgLog(TAG_MPU, "XÁC NHẬN XOAY NGANG ĐÈN: Góc nghiêng %.1f° -> Kích hoạt Ánh Sáng Vàng Thân Thiện!", maxTilt);
+      return true;
+    }
+  } else {
+    // Nếu góc chưa đủ nghiêng hoặc đang di chuyển/vung lắc -> xóa bộ đếm thời gian
+    horizontalTiltStart = 0;
+  }
+
+  return false;
 }
 
 bool isLampStationaryOnTable() {
